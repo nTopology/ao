@@ -106,6 +106,11 @@ TEST_CASE("Mesh::render (face count in rectangular prism)")
     auto m = Mesh::render(t, Region<3>({-1, -1, -1}, {5, 2, 1.25}), 0.125);
     REQUIRE(m->verts.size() == 9); // index 0 is unused
     REQUIRE(m->branes.size() == 12);
+    m->saveSTL("cube00.stl");
+
+    t = rotate2d(t, 46.4f);
+    m = Mesh::render(t, Region<3>({ -10, -2, -1.25 }, { 5, 5, 1.25 }), 0.125);
+    m->saveSTL("cube46.4.stl");
 }
 
 TEST_CASE("Mesh::export (.stl)") {
