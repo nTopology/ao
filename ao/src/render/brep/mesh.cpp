@@ -154,7 +154,7 @@ void Mesh::line(Eigen::Vector3f a, Eigen::Vector3f b)
     auto b_ = verts.size();
     verts.push_back(b);
 
-    branes.push_back({a_, a_, b_});
+    branes.push_back({uint32_t(a_), uint32_t(a_), uint32_t(b_)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////
