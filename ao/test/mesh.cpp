@@ -108,7 +108,7 @@ TEST_CASE("Mesh::render (face count in rectangular prism)")
     REQUIRE(m->branes.size() == 12);
     m->saveSTL("cube00.stl");
 
-    t = rotate2d(t, 46.4f);
+    t = rotate2d(t, 0.8133234f);
     m = Mesh::render(t, Region<3>({ -10, -2, -1.25 }, { 5, 5, 1.25 }), 0.125);
     m->saveSTL("cube46.4.stl");
 }
@@ -124,13 +124,13 @@ TEST_CASE("Mesh::export (.stl)") {
   auto s = sphere(1.95f);
 
   cube = max(-s, cube);
-  Region<3> r({ -2.5, -2.5, -2.5 }, { 2.5, 2.5, 2.5 });
+  Region<3> r({ -5, -5, -5 }, { 5, 5, 5 });
 
-  auto mesh = Mesh::render(cube, r, .1);
+  auto mesh = Mesh::render(cube, r, .05);
 
-  Eigen::Matrix3f m;
-  m = Eigen::AngleAxisf(float(M_PI / 4), Eigen::Vector3f::UnitY()) *
-    Eigen::AngleAxisf(float(atan(1 / sqrt(2))), Eigen::Vector3f::UnitX());
+//   Eigen::Matrix3f m;
+//   m = Eigen::AngleAxisf(float(M_PI / 4), Eigen::Vector3f::UnitY()) *
+//     Eigen::AngleAxisf(float(atan(1 / sqrt(2))), Eigen::Vector3f::UnitX());
 
   //     auto mesh_ = mesh->remap(
   //       m(0, 0)*Tree::X() + m(0, 1)*Tree::Y() + m(0, 2)*Tree::Z(),
@@ -138,7 +138,14 @@ TEST_CASE("Mesh::export (.stl)") {
   //       m(2, 0)*Tree::X() + m(2, 1)*Tree::Y() + m(2, 2)*Tree::Z());
 
   mesh->saveSTL("cubeSphereX.stl");
-  mesh->saveSTL("cubeSphereA.stl",false);
+  mesh->saveSTL("cubeSphereA.stl", false);
+
+  auto rCube = rotate2d(cube, 0.8133234f);
+  mesh = Mesh::render(rCube,
+                   Region<3>({ -5.f, -5.f, -5.f }, { 5.f, 5.f, 5.f }), 
+                   0.05);
+
+  mesh->saveSTL("cubeSphereXR45.stl");
 
   auto cube2 = max(max(
     max(-(Tree::X() + 1.5),
