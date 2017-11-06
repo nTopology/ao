@@ -31,6 +31,7 @@ add_library(ao-kernel STATIC
     ../include/ao/render/discrete/voxels.hpp
     render/brep/xtree.cpp
     ../include/ao/render/brep/xtree.hpp
+    ../include/ao/render/brep/ao_MeshProximityTable.h
     render/brep/contours.cpp
     ../include/ao/render/brep/contours.hpp
     render/brep/mesh.cpp
@@ -54,7 +55,7 @@ add_library(ao-kernel STATIC
     ../include/ao/ao.h
 )
 
-target_link_libraries(ao-kernel PUBLIC boost eigen pngstatic)
+target_link_libraries(ao-kernel PUBLIC boost eigen pngstatic ntglm)
 
 target_include_directories(ao-kernel PUBLIC
     ../include
