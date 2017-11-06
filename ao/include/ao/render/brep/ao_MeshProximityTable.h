@@ -7,7 +7,9 @@
 
 #pragma once
 #include <glm/glm.hpp>
+#pragma warning(push, 0)
 #include <Eigen/eigen>
+#pragma warning( pop )
 
 //interface classes for icarus_MeshProximityTable, to avoid dependency loops.
 
