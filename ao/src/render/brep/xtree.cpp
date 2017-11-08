@@ -25,7 +25,7 @@ namespace Kernel {
   std::unique_ptr<const XTree<N>> XTree<N>::build(
     std::enable_if_t<N2 == 3, MeshProximityTableInterface&> table, float offset, double max_err, bool multithread, std::atomic_bool& cancel) {
     assert(N == N2);
-    return build(*(table.getRoot()), offset, max_err, multithread, cancel);
+    return build(*(table.getRootInterface()), offset, max_err, multithread, cancel);
   }
 
   template <unsigned N>
@@ -401,11 +401,16 @@ namespace Kernel {
           std::vector<Eigen::Vector4d> derivs = leafNode.getNormalizedDerivsAndValues(glm::vec3(
             targets[i].first(0), targets[i].first(1), targets[i].first(2)));
           for (auto iter = derivs.begin(); iter != derivs.end(); ++iter) {
+            float normalizedOffset = offset / (std::sqrt(derivs(0) * derivs(0) + derivs(1) * derivs(1) + derivs(2) * derivs(2)));
+            //If denominator is 0, that means the gradient of the distance was 0, which should never happen.
+            derivs(3) -= normalizedOffset; //Because we want the distance from the offset, not from the original mesh.
             intersections.push_back(targets[i].first, *iter);
           }
-          std::vector<Eigen::Vector4d> derivs = leafNode.getNormalizedDerivsAndValues(glm::vec3(
+          derivs = leafNode.getNormalizedDerivsAndValues(glm::vec3(
             targets[i].second(0), targets[i].second(1), targets[i].second(2)));
           for (auto iter = derivs.begin(); iter != derivs.end(); ++iter) {
+            float normalizedOffset = offset / (std::sqrt(derivs(0) * derivs(0) + derivs(1) * derivs(1) + derivs(2) * derivs(2)));
+            derivs(3) -= normalizedOffset; //Because we want the distance from the offset, not from the original mesh.
             intersections.push_back(targets[i].second, *iter);
           }
           // With a tree, every intersection being invalid is ?!, but here it should be completely impossible.
