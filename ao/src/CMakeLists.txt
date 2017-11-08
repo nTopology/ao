@@ -55,7 +55,7 @@ add_library(ao-kernel STATIC
     ../include/ao/ao.h
 )
 
-target_link_libraries(ao-kernel PUBLIC boost eigen pngstatic ntglm)
+target_link_libraries(ao-kernel PUBLIC boost eigen3 pngstatic ntglm)
 
 target_include_directories(ao-kernel PUBLIC
     ../include
