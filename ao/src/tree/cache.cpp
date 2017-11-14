@@ -5,9 +5,14 @@
 
 namespace Kernel {
 
-// Static class variables
+// Static class variables.
 std::recursive_mutex Cache::mut;
 Cache Cache::_instance;
+
+// Positional primitives are also static, and instantiated once.
+XPos Cache::_XPos;
+YPos Cache::_YPos;
+ZPos Cache::_ZPos;
 
 Cache::Node Cache::constant(float v)
 {
@@ -19,6 +24,7 @@ Cache::Node Cache::constant(float v)
             Tree::FLAG_LOCATION_AGNOSTIC,
             0, // rank
             v, // value
+            nullptr, //primitive
             nullptr,
             nullptr });
         constants.insert({v, out});
@@ -37,7 +43,8 @@ Cache::Node Cache::operation(Opcode::Opcode op, Cache::Node lhs,
     // These are opcodes that you're not allowed to use here
     assert(op != Opcode::CONST &&
            op != Opcode::INVALID &&
-           op != Opcode::LAST_OP);
+           op != Opcode::LAST_OP &&
+           op != Opcode::PRIMITIVE);
 
     // See if we can simplify the expression, either because it's an identity
     // operation (e.g. X + 0) or a commutative expression to be balanced
@@ -63,7 +70,8 @@ Cache::Node Cache::operation(Opcode::Opcode op, Cache::Node lhs,
               (!rhs.get() || (rhs->flags & Tree::FLAG_LOCATION_AGNOSTIC)) &&
                op != Opcode::VAR_X &&
                op != Opcode::VAR_Y &&
-               op != Opcode::VAR_Z)
+               op != Opcode::VAR_Z &&
+               op != Opcode::PRIMITIVE) //Primitives are assumed to be location-gnostic.
                   ? Tree::FLAG_LOCATION_AGNOSTIC : 0),
 
             // Rank
@@ -72,6 +80,9 @@ Cache::Node Cache::operation(Opcode::Opcode op, Cache::Node lhs,
 
             // Value
             std::nanf(""),
+
+            //Primitive
+            nullptr,
 
             // Arguments
             lhs,
@@ -104,6 +115,27 @@ Cache::Node Cache::operation(Opcode::Opcode op, Cache::Node lhs,
     }
 }
 
+Cache::Node Cache::primitive(const Primitive& prim) {
+  auto f = primitives.find(&prim);
+  if (f == primitives.end())
+  {
+    Node out(new Tree::Tree_{
+      Opcode::PRIMITIVE,
+      0,
+      0, // rank
+      0, // value
+      &prim, //primitive
+      nullptr,
+      nullptr });
+    primitives.insert({ &prim, out });
+    return out;
+  }
+  else
+  {
+    assert(!f->second.expired());
+    return f->second.lock();
+  }
+}
 
 Cache::Node Cache::var()
 {
@@ -112,6 +144,7 @@ Cache::Node Cache::var()
         Tree::FLAG_LOCATION_AGNOSTIC,
         0, // rank
         std::nanf(""), // value
+        nullptr, //primitive
         nullptr,
         nullptr});
 }
@@ -122,6 +155,14 @@ void Cache::del(float v)
     assert(c != constants.end());
     assert(c->second.expired());
     constants.erase(c);
+}
+
+void Cache::del(const Primitive& prim)
+{
+  auto p = primitives.find(&prim);
+  assert(c != primitives.end());
+  assert(c->second.expired());
+  primitives.erase(&prim);
 }
 
 void Cache::del(Opcode::Opcode op, Node lhs, Node rhs)

@@ -12,17 +12,23 @@ DerivEvaluator::DerivEvaluator(
         std::shared_ptr<Tape> t, const std::map<Tree::Id, float>& vars)
     : PointEvaluator(t, vars), d(3, tape->num_clauses + 1)
 {
-    // Initialize all derivatives to zero
-    d = 0;
-
-    // Load immutable derivatives for X, Y, Z
-    d(0, tape->X) = 1;
-    d(1, tape->Y) = 1;
-    d(2, tape->Z) = 1;
+    // Load immutable derivatives for XOpc, YOpc, ZOpc
+    if (tape->XOpc != 0) 
+      d(0, tape->XOpc) = 1.f;
+    if (tape->YOpc != 0)
+      d(1, tape->YOpc) = 1.f;
+    if (tape->ZOpc != 0)
+      d(2, tape->ZOpc) = 1.f;
+    //Load derivatives for primitives.
 }
 
 Eigen::Vector4f DerivEvaluator::deriv(const Eigen::Vector3f& pt)
 {
+    //Load gradients of primitives; only use the first gradient of each here 
+    //(following precendent for min and max evaluation). 
+    for (auto prim : tape->primitives) {
+      d.col(prim.first) = *(prim.second->getGradients(pt).begin());
+    }
     // Perform value evaluation, saving results
     auto w = eval(pt);
     auto xyz = d.col(tape->rwalk(*this));
@@ -132,6 +138,7 @@ void DerivEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef ov

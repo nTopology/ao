@@ -25,9 +25,16 @@ public:
      */
     void set(const Eigen::Vector3f& p, size_t index)
     {
-        f(tape->X, index) = p.x();
-        f(tape->Y, index) = p.y();
-        f(tape->Z, index) = p.z();
+        if (tape->XOpc != 0)
+          f(tape->XOpc, index) = p.x();
+        if (tape->YOpc != 0) 
+          f(tape->YOpc, index) = p.y();
+        if (tape->ZOpc != 0)
+          f(tape->ZOpc, index) = p.z();
+        points(index) = p;
+        for (auto prim : tape->primitives) {
+          f(prim.first, index) = prim.second->getValue(p);
+        }
     }
 
     /*  This is the number of samples that we can process in one pass */
@@ -41,7 +48,11 @@ protected:
     /*  f(clause, index) is a specific data point */
     Eigen::Array<float, Eigen::Dynamic, N, Eigen::RowMajor> f;
 
-    /*  ambig(index) returns whether a particular slot is ambiguous */
+    //Stores the points evaluated at each index.
+
+    Eigen::Array<Eigen::Vector3f, 1, N> points;
+
+    /*  ambig(index) returns whether a particular slot is ambiguous.*/
     Eigen::Array<bool, 1, N> ambig;
 
     /*

@@ -15,7 +15,7 @@ struct Template
     std::vector<uint8_t> serialize() const;
 
     /*
-     *  Deserialize from a set of raw bytes
+     *  Deserialize from a set of raw bytes.  Does not preserve primitives.
      */
     static Template deserialize(const std::vector<uint8_t>& data);
 

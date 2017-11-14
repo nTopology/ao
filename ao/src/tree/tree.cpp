@@ -23,6 +23,16 @@ Tree::Tree(float v)
     // Nothing to do here
 }
 
+Tree::Tree(const Primitive& prim)
+  : ptr(Cache::instance()->primitive(prim)) 
+{
+  //Nothing to do here either.
+}
+
+Tree Tree::X() { return Tree((Cache::XPrim())); }
+Tree Tree::Y() { return Tree((Cache::YPrim())); }
+Tree Tree::Z() { return Tree((Cache::ZPrim())); }
+
 Tree::Tree(Opcode::Opcode op, Tree a, Tree b)
     : ptr(Cache::instance()->operation(op, a.ptr, b.ptr))
 {
@@ -123,8 +133,7 @@ Tree Tree::load(const std::string& filename)
 Tree Tree::remap(Tree X_, Tree Y_, Tree Z_) const
 {
     std::map<Tree::Id, std::shared_ptr<Tree_>> m = {
-        {X().id(), X_.ptr}, {Y().id(), Y_.ptr}, {Z().id(), Z_.ptr}};
-
+        {XOpc().id(), X_.ptr}, {YOpc().id(), Y_.ptr}, {ZOpc().id(), Z_.ptr}};
     return remap(m);
 }
 

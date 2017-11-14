@@ -31,9 +31,13 @@ IntervalEvaluator::IntervalEvaluator(
 Interval::I IntervalEvaluator::eval(const Eigen::Vector3f& lower,
                                     const Eigen::Vector3f& upper)
 {
-    i[tape->X] = {lower.x(), upper.x()};
-    i[tape->Y] = {lower.y(), upper.y()};
-    i[tape->Z] = {lower.z(), upper.z()};
+    i[tape->XOpc] = {lower.x(), upper.x()};
+    i[tape->YOpc] = {lower.y(), upper.y()};
+    i[tape->ZOpc] = {lower.z(), upper.z()};
+    Region<3> region(lower.template cast<double>(), upper.template cast<double>());
+    for (auto prim : tape->primitives) {
+      i[prim.first] = prim.second->getRange(region);
+    }
 
     return i[tape->rwalk(*this)];
 }
@@ -73,8 +77,7 @@ Interval::I IntervalEvaluator::evalAndPush(const Eigen::Vector3f& lower,
         return Tape::KEEP_BOTH;
     },
         Tape::INTERVAL,
-        {{i[tape->X].lower(), i[tape->Y].lower(), i[tape->Z].lower()},
-         {i[tape->X].upper(), i[tape->Y].upper(), i[tape->Z].upper()}});
+        {lower.template cast<double>(), upper.template cast<double>() });
     return out;
 }
 
@@ -192,6 +195,7 @@ void IntervalEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef out

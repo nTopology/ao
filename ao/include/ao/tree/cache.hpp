@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include "ao/tree/tree.hpp"
+#include "ao/eval/primitive.h"
 
 namespace Kernel {
 
@@ -36,17 +37,25 @@ public:
     Node operation(Opcode::Opcode op, Node lhs=nullptr, Node rhs=nullptr,
                    bool simplify=true);
 
-    Node X() { return operation(Opcode::VAR_X); }
-    Node Y() { return operation(Opcode::VAR_Y); }
-    Node Z() { return operation(Opcode::VAR_Z); }
+    Node X() { return primitive(_XPos); }
+    Node Y() { return primitive(_YPos); }
+    Node Z() { return primitive(_ZPos); }
+
+    static const XPos& XPrim() { return _XPos; }
+    static const YPos& YPrim() { return _YPos; }
+    static const ZPos& ZPrim() { return _ZPos; }
+
+    std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> getPrimitives() { return primitives; }
 
     Node var();
+    Node primitive(const Primitive& prim);
 
     /*
      *  Called when the last Tree_ is destroyed
      */
     void del(float v);
     void del(Opcode::Opcode op, Node lhs=nullptr, Node rhs=nullptr);
+    void del(const Primitive& prim);
 
 protected:
     /*
@@ -79,8 +88,18 @@ protected:
     /*  Constants in the tree are uniquely identified by their value  */
     std::map<float, std::weak_ptr<Tree::Tree_>> constants;
 
+    /* And primitives by the pointer to them */
+    std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> primitives;
+
+    //static variables implemented in the cpp are used to ensure one shared among all trees,
+    //as avoiding deduplication is the whole point.  If it proves necessary to have multiple
+    //independent trees, the cache can be changed to a property of the tree, and these variables
+    //changed to normal ones.
     static std::recursive_mutex mut;
     static Cache _instance;
+    static XPos _XPos;
+    static YPos _YPos;
+    static ZPos _ZPos;
 };
 
 }   // namespace Kernel

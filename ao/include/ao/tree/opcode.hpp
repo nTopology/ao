@@ -10,6 +10,11 @@ namespace Opcode
 // To create a new opcode, add it to the relevant section with the
 // next-highest value and increment LAST_OP by one.  This is necessary
 // to avoid changing the meanings of opcodes in previously saved files.
+// As a result, opcodes are not all in order.
+
+//The primitives system makes VAR_X, VAR_Y, and VAR_Z deprecated
+//unless the ao i/o methods are needed; PRIMITIVE with an appropriate
+//reference should be used instead.
 #define OPCODES \
     OPCODE(INVALID, 0)      \
                             \
@@ -19,6 +24,7 @@ namespace Opcode
     OPCODE(VAR_Z, 4)        \
     OPCODE(VAR, 5)          \
     OPCODE(CONST_VAR, 6)    \
+    OPCODE(PRIMITIVE, 30)   \
                             \
     OPCODE(SQUARE, 7)       \
     OPCODE(SQRT, 8)         \
@@ -43,13 +49,14 @@ namespace Opcode
     OPCODE(POW, 24)         \
     OPCODE(NTH_ROOT, 25)    \
     OPCODE(MOD, 26)         \
-    OPCODE(NANFILL, 27)
+    OPCODE(NANFILL, 27)     
+  
 
 enum Opcode {
 #define OPCODE(s, i) s=i,
     OPCODES
 #undef OPCODE
-    LAST_OP=30,
+    LAST_OP=31,
 };
 
 size_t args(Opcode op);

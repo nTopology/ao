@@ -6,6 +6,7 @@
 #include <map>
 
 #include "ao/tree/opcode.hpp"
+#include "ao/eval/primitive.h"
 
 namespace Kernel {
 
@@ -24,12 +25,22 @@ public:
      */
     Tree(float v);
 
+
     /*
-     *  Constructors for individual axes
+    *  Returns a Tree for the given primitive
+    */
+    Tree(const Primitive& prim);
+
+    /*
+     *  Constructors for individual axes.
      */
-    static Tree X() { return Tree(Opcode::VAR_X); }
-    static Tree Y() { return Tree(Opcode::VAR_Y); }
-    static Tree Z() { return Tree(Opcode::VAR_Z); }
+    static Tree XOpc() { return Tree(Opcode::VAR_X); }
+    static Tree YOpc() { return Tree(Opcode::VAR_Y); }
+    static Tree ZOpc() { return Tree(Opcode::VAR_Z); }
+
+    static Tree X();
+    static Tree Y();
+    static Tree Z();
 
     /*
      *  Used to mark a bad parse, among other things
@@ -56,7 +67,7 @@ public:
     /*  Bitfield enum for node flags */
     enum Flags {
         /*  Does this Id only contain constants and variables
-         *  (no VAR_X, VAR_Y, or VAR_Z opcodes allowed) */
+         *  (no VAR_X, VAR_Y, VAR_Z, or PRIMITIVE opcodes allowed) */
         FLAG_LOCATION_AGNOSTIC  = (1<<1),
     };
 
@@ -65,6 +76,7 @@ public:
         /*
          *  Destructor erases this Tree from the global Cache
          */
+
         ~Tree_();
 
         const Opcode::Opcode op;
@@ -73,6 +85,9 @@ public:
 
         /*  Only populated for constants  */
         const float value;
+
+        /* Only populated for primitives */
+        const Primitive* prim;
 
         /*  Only populated for operations  */
         const std::shared_ptr<Tree_> lhs;
@@ -112,7 +127,8 @@ public:
     Id id() const { return ptr.get(); }
 
     /*
-     *  Remaps the base coordinates
+     *  Remaps the base coordinates.  Does not affect primitives dependent on X, Y, and Z coordinates (even
+     *  the primitive versions of those coordinates).
      */
     Tree remap(Tree X, Tree Y, Tree Z) const;
 
