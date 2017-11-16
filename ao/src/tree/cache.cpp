@@ -160,8 +160,8 @@ void Cache::del(float v)
 void Cache::del(const Primitive& prim)
 {
   auto p = primitives.find(&prim);
-  assert(c != primitives.end());
-  assert(c->second.expired());
+  assert(p != primitives.end());
+  assert(p->second.expired());
   primitives.erase(&prim);
 }
 

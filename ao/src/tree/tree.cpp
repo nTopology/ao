@@ -66,6 +66,10 @@ Tree::Tree_::~Tree_()
     {
         Cache::instance()->del(value);
     }
+    else if (op == Opcode::PRIMITIVE)
+    {
+      Cache::instance()->del(*prim);
+    }
     else if (op != Opcode::VAR)
     {
         Cache::instance()->del(op, lhs, rhs);
