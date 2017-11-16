@@ -40,7 +40,13 @@ Tape::Tape(const Tree root)
         }
         else if (m->op == Opcode::VAR)
         {
-            vars.left.insert({id, m.id()});
+          vars.left.insert({ id, m.id() });
+        }
+        // For primitives, record their pointers so that
+        // they can be used when calculating a point.
+        else if (m->op == Opcode::PRIMITIVE) {
+          assert(m->prim); //Should not be a null pointer.
+          primitives[id] = m->prim;
         }
         else
         {
@@ -60,15 +66,17 @@ Tape::Tape(const Tree root)
         tape->t.push_back(t);
     }
 
-    // Make sure that X, Y, Z have been allocated space
-    std::vector<Tree> axes = {Tree::X(), Tree::Y(), Tree::Z()};
-    for (auto a : axes)
+    // With primitives, we no longer make sure that X, Y, Z have been allocated space;
+    // any primitives not in the tree don't need space.  We still record the locations
+    // of the old-style axes if they exist.
+    std::vector<Tree> axes = {Tree::XOpc(), Tree::YOpc(), Tree::ZOpc()};
+    /*for (auto a : axes)
     {
         if (clauses.find(a.id()) == clauses.end())
         {
             clauses[a.id()] = clauses.size();
         }
-    }
+    }*/
 
     // Store the total number of clauses
     // Remember, evaluators need to allocate one more than this
@@ -79,10 +87,10 @@ Tape::Tape(const Tree root)
     disabled.resize(clauses.size());
     remap.resize(clauses.size());
 
-    // Save X, Y, Z ids
-    X = clauses.at(axes[0].id());
-    Y = clauses.at(axes[1].id());
-    Z = clauses.at(axes[2].id());
+    // Save old-style X, Y, Z ids, or 0 if they don't exist in the tree.
+    XOpc = clauses.find(axes[0].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
+    YOpc = clauses.find(axes[1].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
+    ZOpc = clauses.find(axes[2].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
 
     // Store the index of the tree's root
     assert(clauses.at(root.id()) == 1);

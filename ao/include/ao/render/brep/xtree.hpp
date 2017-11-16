@@ -16,235 +16,235 @@
 
 namespace Kernel {
 
-  template <unsigned N>
-  class XTree
+template <unsigned N>
+class XTree
+{
+public:
+  /*
+  * XTree builder that uses a meshProximityTable and offset.  Unique to the icarus (NTopology) version 
+  * (not present in standard ao library).  Uses the table to determine the region included and the minimum feature size.
+  */
+  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
+  static std::unique_ptr<const XTree<N>> build(
+    std::enable_if_t<N2 == 3, MeshProximityTableInterface&> table, float offset, double max_err = 1e-8, bool multithread = true,
+    std::atomic_bool& cancel = std::atomic_bool(false));
+  /*
+  * Constructs an octree from a meshProximityTable node and offset.  Unique to the icarus (NTopology) version.
+  * Uses the node to determine the region included and the minimum feature size.
+  */
+  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
+  static std::unique_ptr<const XTree<N>> build(
+    std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err = 1e-8, bool multithread = true,
+    std::atomic_bool& cancel = std::atomic_bool(false));
+  /*
+  *  Constructs an octree or quadtree by subdividing a region
+  *  (unstoppable)
+  */
+  static std::unique_ptr<const XTree> build(
+    Tree t, Region<N> region, double min_feature = 0.1,
+    double max_err = 1e-8, bool multithread = true);
+
+  /*
+  *  Fully-specified XTree builder (stoppable through cancel)
+  */
+  static std::unique_ptr<const XTree> build(
+    Tree t, const std::map<Tree::Id, float>& vars,
+    Region<N> region, double min_feature,
+    double max_err, bool multithread,
+    std::atomic_bool& cancel);
+
+  /*
+  *  XTree builder that re-uses existing evaluators
+  *  If multithread is true, es must be a pointer to an array of evaluators
+  */
+  static std::unique_ptr<const XTree> build(
+    XTreeEvaluator* es,
+    Region<N> region, double min_feature,
+    double max_err, bool multithread,
+    std::atomic_bool& cancel);
+
+  /*
+  *  Checks whether this tree splits
+  */
+  bool isBranch() const { return children[0].get() != nullptr; }
+
+  /*
+  *  Looks up a child, returning *this if this isn't a branch
+  */
+  const XTree<N>* child(unsigned i) const
   {
-  public:
-    /*
-    * XTree builder that uses a meshProximityTable and offset.  Unique to the icarus (NTopology) version 
-    * (not present in standard ao library).  Uses the table to determine the region included and the minimum feature size.
-    */
-    template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-    static std::unique_ptr<const XTree<N>> build(
-      std::enable_if_t<N2 == 3, MeshProximityTableInterface&> table, float offset, double max_err = 1e-8, bool multithread = true,
-      std::atomic_bool& cancel = std::atomic_bool(false));
-    /*
-    * Constructs an octree from a meshProximityTable node and offset.  Unique to the icarus (NTopology) version.
-    * Uses the node to determine the region included and the minimum feature size.
-    */
-    template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-    static std::unique_ptr<const XTree<N>> build(
-      std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err = 1e-8, bool multithread = true,
-      std::atomic_bool& cancel = std::atomic_bool(false));
-    /*
-    *  Constructs an octree or quadtree by subdividing a region
-    *  (unstoppable)
-    */
-    static std::unique_ptr<const XTree> build(
-      Tree t, Region<N> region, double min_feature = 0.1,
-      double max_err = 1e-8, bool multithread = true);
+    return isBranch() ? children[i].get() : this;
+  }
 
-    /*
-    *  Fully-specified XTree builder (stoppable through cancel)
-    */
-    static std::unique_ptr<const XTree> build(
-      Tree t, const std::map<Tree::Id, float>& vars,
-      Region<N> region, double min_feature,
-      double max_err, bool multithread,
-      std::atomic_bool& cancel);
+  /*
+  *  Returns the filled / empty state for the ith corner
+  */
+  Interval::State cornerState(uint8_t i) const { return corners[i]; }
 
-    /*
-    *  XTree builder that re-uses existing evaluators
-    *  If multithread is true, es must be a pointer to an array of evaluators
-    */
-    static std::unique_ptr<const XTree> build(
-      XTreeEvaluator* es,
-      Region<N> region, double min_feature,
-      double max_err, bool multithread,
-      std::atomic_bool& cancel);
-
-    /*
-    *  Checks whether this tree splits
-    */
-    bool isBranch() const { return children[0].get() != nullptr; }
-
-    /*
-    *  Looks up a child, returning *this if this isn't a branch
-    */
-    const XTree<N>* child(unsigned i) const
+  /*
+  *  Returns the corner position for the ith corner
+  */
+  Eigen::Array<double, N, 1> cornerPos(uint8_t i) const
+  {
+    Eigen::Array<double, N, 1> out;
+    for (unsigned axis = 0; axis < N; ++axis)
     {
-      return isBranch() ? children[i].get() : this;
+      out(axis) = (i & (1 << axis)) ? region.upper(axis)
+        : region.lower(axis);
     }
+    return out;
+  }
+
+  /*
+  *  Returns the averaged mass point
+  */
+  Eigen::Matrix<double, N, 1> massPoint() const;
+
+  /*  Boilerplate for an object that contains an Eigen struct  */
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /*
-    *  Returns the filled / empty state for the ith corner
+    *  Unpack the vertex into a 3-element array
+    *  (using the region's perpendicular coordinates)
     */
-    Interval::State cornerState(uint8_t i) const { return corners[i]; }
+    Eigen::Vector3d vert3(unsigned index = 0) const;
 
-    /*
-    *  Returns the corner position for the ith corner
-    */
-    Eigen::Array<double, N, 1> cornerPos(uint8_t i) const
-    {
-      Eigen::Array<double, N, 1> out;
-      for (unsigned axis = 0; axis < N; ++axis)
-      {
-        out(axis) = (i & (1 << axis)) ? region.upper(axis)
-          : region.lower(axis);
-      }
-      return out;
-    }
+  /*  The region filled by this XTree */
+  const Region<N> region;
 
-    /*
-    *  Returns the averaged mass point
-    */
-    Eigen::Matrix<double, N, 1> massPoint() const;
+  /*  Children pointers, if this is a branch  */
+  std::array<std::unique_ptr<const XTree<N>>, 1 << N> children;
 
-    /*  Boilerplate for an object that contains an Eigen struct  */
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  /*  level = max(map(level, children)) + 1  */
+  unsigned level = 0;
 
-      /*
-      *  Unpack the vertex into a 3-element array
-      *  (using the region's perpendicular coordinates)
-      */
-      Eigen::Vector3d vert3(unsigned index = 0) const;
+  /*  Vertex locations, if this is a leaf
+  *
+  *  To make cells manifold, we may store multiple vertices in a single
+  *  leaf; see writeup in marching.cpp for details  */
+  Eigen::Matrix<double, N, _pow(2, N - 1)> verts;
 
-    /*  The region filled by this XTree */
-    const Region<N> region;
+  /*
+  *  Look up a particular vertex by index
+  */
+  Eigen::Matrix<double, N, 1> vert(unsigned i = 0) const
+  {
+    assert(i < vertex_count); return verts.col(i);
+  }
 
-    /*  Children pointers, if this is a branch  */
-    std::array<std::unique_ptr<const XTree<N>>, 1 << N> children;
+  /*  Array of filled states for the cell's corners
+  *  (must only be FILLEd / EMPTY, not UNKNOWN or AMBIGUOUS ) */
+  std::array<Interval::State, 1 << N> corners;
 
-    /*  level = max(map(level, children)) + 1  */
-    unsigned level = 0;
+  /*  Leaf cell state, when known  */
+  Interval::State type = Interval::UNKNOWN;
 
-    /*  Vertex locations, if this is a leaf
-    *
-    *  To make cells manifold, we may store multiple vertices in a single
-    *  leaf; see writeup in marching.cpp for details  */
-    Eigen::Matrix<double, N, _pow(2, N - 1)> verts;
+  /*  Feature rank for the cell's vertex, where                    *
+  *      1 is face, 2 is edge, 3 is corner                        *
+  *                                                               *
+  *  This value is populated in find{Leaf|Branch}Matrices and     *
+  *  used when merging intersections from lower-ranked children   */
+  unsigned rank = 0;
 
-    /*
-    *  Look up a particular vertex by index
-    */
-    Eigen::Matrix<double, N, 1> vert(unsigned i = 0) const
-    {
-      assert(i < vertex_count); return verts.col(i);
-    }
+  /* Used as a unique per-vertex index when unpacking into a b-rep;   *
+  * this is cheaper than storing a map of XTree* -> uint32_t         */
+  mutable std::array<uint32_t, _pow(2, N - 1)> index;
 
-    /*  Array of filled states for the cell's corners
-    *  (must only be FILLEd / EMPTY, not UNKNOWN or AMBIGUOUS ) */
-    std::array<Interval::State, 1 << N> corners;
+  /*  Bitfield marking which corners are set */
+  uint8_t corner_mask = 0;
 
-    /*  Leaf cell state, when known  */
-    Interval::State type = Interval::UNKNOWN;
+  /*  Stores the number of patches / vertices in this cell
+  *  (which could be more than one to keep the surface manifold */
+  unsigned vertex_count = 0;
 
-    /*  Feature rank for the cell's vertex, where                    *
-    *      1 is face, 2 is edge, 3 is corner                        *
-    *                                                               *
-    *  This value is populated in find{Leaf|Branch}Matrices and     *
-    *  used when merging intersections from lower-ranked children   */
-    unsigned rank = 0;
+  /*  Marks whether this cell is manifold or not  */
+  bool manifold = false;
 
-    /* Used as a unique per-vertex index when unpacking into a b-rep;   *
-    * this is cheaper than storing a map of XTree* -> uint32_t         */
-    mutable std::array<uint32_t, _pow(2, N - 1)> index;
+  /*  Single copy of the marching squares / cubes table, lazily
+  *  initialized when needed */
+  static std::unique_ptr<const Marching::MarchingTable<N>> mt;
 
-    /*  Bitfield marking which corners are set */
-    uint8_t corner_mask = 0;
+protected:
+  /*  Helper typedef for N-dimensional column vector */
+  typedef Eigen::Matrix<double, N, 1> Vec;
 
-    /*  Stores the number of patches / vertices in this cell
-    *  (which could be more than one to keep the surface manifold */
-    unsigned vertex_count = 0;
+  /*
+  *  Private constructor from meshProximityTable node and offset (icarus only).
+  */
+  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
+  XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err,
+    bool multithread, std::atomic_bool& cancel);
 
-    /*  Marks whether this cell is manifold or not  */
-    bool manifold = false;
+  /*
+  *  Private constructor for XTree
+  *
+  *  If multiple evaluators are provided, then tree construction will
+  *  be distributed across multiple threads.
+  */
+  XTree(XTreeEvaluator* eval, Region<N> region,
+    double min_feature, double max_err, bool multithread,
+    std::atomic_bool& cancel);
 
-    /*  Single copy of the marching squares / cubes table, lazily
-    *  initialized when needed */
-    static std::unique_ptr<const Marching::MarchingTable<N>> mt;
+  /*
+  *  Searches for a vertex within the XTree cell, using the QEF matrices
+  *  that are pre-populated in AtA, AtB, etc.
+  *
+  *  Minimizes the QEF towards mass_point
+  *
+  *  Stores the vertex in vert and returns the QEF error
+  */
+  double findVertex(unsigned i = 0);
 
-  protected:
-    /*  Helper typedef for N-dimensional column vector */
-    typedef Eigen::Matrix<double, N, 1> Vec;
+  /*
+  *  Returns edges (as indices into corners)
+  *  (must be specialized for a specific dimensionality)
+  */
+  const std::vector<std::pair<uint8_t, uint8_t>>& edges() const;
 
-    /*
-    *  Private constructor from meshProximityTable node and offset (icarus only).
-    */
-    template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-    XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err,
-      bool multithread, std::atomic_bool& cancel);
+  /*
+  *  Returns a table such that looking up a particular corner
+  *  configuration returns whether that configuration is safe to
+  *  collapse.
+  *  (must be specialized for a specific dimensionality)
+  *
+  *  This implements the test from [Gerstner et al, 2000], as
+  *  described in [Ju et al, 2002].
+  */
+  bool cornersAreManifold() const;
 
-    /*
-    *  Private constructor for XTree
-    *
-    *  If multiple evaluators are provided, then tree construction will
-    *  be distributed across multiple threads.
-    */
-    XTree(XTreeEvaluator* eval, Region<N> region,
-      double min_feature, double max_err, bool multithread,
-      std::atomic_bool& cancel);
+  /*
+  *  Checks to make sure that the fine contour is topologically equivalent
+  *  to the coarser contour by comparing signs in edges and faces
+  *  (must be specialized for a specific dimensionality)
+  *
+  *  Returns true if the cell can be collapsed without changing topology
+  *  (with respect to the leaves)
+  */
+  bool leafsAreManifold() const;
 
-    /*
-    *  Searches for a vertex within the XTree cell, using the QEF matrices
-    *  that are pre-populated in AtA, AtB, etc.
-    *
-    *  Minimizes the QEF towards mass_point
-    *
-    *  Stores the vertex in vert and returns the QEF error
-    */
-    double findVertex(unsigned i = 0);
+  /*  Mass point is the average intersection location *
+  *  (the last coordinate is number of points summed) */
+  Eigen::Matrix<double, N + 1, 1> _mass_point;
 
-    /*
-    *  Returns edges (as indices into corners)
-    *  (must be specialized for a specific dimensionality)
-    */
-    const std::vector<std::pair<uint8_t, uint8_t>>& edges() const;
+  /*  QEF matrices */
+  Eigen::Matrix<double, N, N> AtA;
+  Eigen::Matrix<double, N, 1> AtB;
+  double BtB = 0;
 
-    /*
-    *  Returns a table such that looking up a particular corner
-    *  configuration returns whether that configuration is safe to
-    *  collapse.
-    *  (must be specialized for a specific dimensionality)
-    *
-    *  This implements the test from [Gerstner et al, 2000], as
-    *  described in [Ju et al, 2002].
-    */
-    bool cornersAreManifold() const;
+  /*  Eigenvalue threshold for determining feature rank  */
+  constexpr static double EIGENVALUE_CUTOFF = 0.1f;
+};
 
-    /*
-    *  Checks to make sure that the fine contour is topologically equivalent
-    *  to the coarser contour by comparing signs in edges and faces
-    *  (must be specialized for a specific dimensionality)
-    *
-    *  Returns true if the cell can be collapsed without changing topology
-    *  (with respect to the leaves)
-    */
-    bool leafsAreManifold() const;
+// Explicit template instantiation declarations
+template <> bool XTree<2>::cornersAreManifold() const;
+template <> bool XTree<3>::cornersAreManifold() const;
 
-    /*  Mass point is the average intersection location *
-    *  (the last coordinate is number of points summed) */
-    Eigen::Matrix<double, N + 1, 1> _mass_point;
+template <> bool XTree<2>::leafsAreManifold() const;
+template <> bool XTree<3>::leafsAreManifold() const;
 
-    /*  QEF matrices */
-    Eigen::Matrix<double, N, N> AtA;
-    Eigen::Matrix<double, N, 1> AtB;
-    double BtB = 0;
+template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const;
+template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const;
 
-    /*  Eigenvalue threshold for determining feature rank  */
-    constexpr static double EIGENVALUE_CUTOFF = 0.1f;
-  };
-
-  // Explicit template instantiation declarations
-  template <> bool XTree<2>::cornersAreManifold() const;
-  template <> bool XTree<3>::cornersAreManifold() const;
-
-  template <> bool XTree<2>::leafsAreManifold() const;
-  template <> bool XTree<3>::leafsAreManifold() const;
-
-  template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const;
-  template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const;
-
-  extern template class XTree<2>;
-  extern template class XTree<3>;
+extern template class XTree<2>;
+extern template class XTree<3>;
 }   // namespace Kernel

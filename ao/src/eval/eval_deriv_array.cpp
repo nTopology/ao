@@ -10,7 +10,7 @@ DerivArrayEvaluator::DerivArrayEvaluator(std::shared_ptr<Tape> t)
 
 DerivArrayEvaluator::DerivArrayEvaluator(
         std::shared_ptr<Tape> t, const std::map<Tree::Id, float>& vars)
-    : ArrayEvaluator(t, vars), d(tape->num_clauses + 1, 1)
+    : ArrayEvaluator(t, vars), d(tape->num_clauses + 1, 1), allPrimitiveGradients(tape->num_clauses + 1, N)
 {
     // Initialize all derivatives to zero
     for (unsigned i=0; i < d.rows(); ++i)
@@ -19,9 +19,12 @@ DerivArrayEvaluator::DerivArrayEvaluator(
     }
 
     // Load immutable derivatives for X, Y, Z
-    d(tape->X).row(0) = 1;
-    d(tape->Y).row(1) = 1;
-    d(tape->Z).row(2) = 1;
+    if (tape->XOpc != 0) 
+      d(tape->XOpc).row(0) = 1;
+    if (tape->YOpc != 0) 
+      d(tape->YOpc).row(1) = 1;
+    if (tape->ZOpc != 0) 
+      d(tape->ZOpc).row(2) = 1;
 }
 
 Eigen::Vector4f DerivArrayEvaluator::deriv(const Eigen::Vector3f& pt)
@@ -29,6 +32,36 @@ Eigen::Vector4f DerivArrayEvaluator::deriv(const Eigen::Vector3f& pt)
     set(pt, 0);
     return derivs(1).col(0);
 }
+
+Eigen::Block<decltype(ArrayEvaluator::ambig), 1, Eigen::Dynamic>
+DerivArrayEvaluator::getAmbiguous(size_t i)
+{
+  // Reset the ambiguous array to all false
+  ambig = false;
+  bool abort = false;
+  tape->walk(
+    [&](Opcode::Opcode op, Clause::Id id, Clause::Id a, Clause::Id b)
+  {
+    if (op == Opcode::PRIMITIVE)
+    {
+      auto prim = tape->primitives[id];
+      for (size_t j = 0; j < i; ++j)
+      {
+        if (!ambig(j) && allPrimitiveGradients(id, j).size() > 1)
+          ambig(j) = true;
+      }
+    }
+    else if (op == Opcode::MIN || op == Opcode::MAX)
+    {
+      ambig.head(i) = ambig.head(i) ||
+        (f.block(a, 0, 1, i) ==
+          f.block(b, 0, 1, i));
+    }
+  }, abort);
+
+  return ambig.head(i);
+}
+
 
 Eigen::Block<decltype(DerivArrayEvaluator::out), 4, Eigen::Dynamic>
 DerivArrayEvaluator::derivs(size_t count)
@@ -152,6 +185,7 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef ov

@@ -35,8 +35,8 @@ public:
      */
     double utilization() const;
 
-    /*  Indices of X, Y, Z coordinates */
-    Clause::Id X, Y, Z;
+    /*  Indices of X, Y, Z old-style (non-primitive) coordinates (0 if they aren't in the tree) */
+    Clause::Id XOpc, YOpc, ZOpc;
 
     /*  Constants, unpacked from the tree at construction */
     std::map<Clause::Id, float> constants;
@@ -46,8 +46,10 @@ public:
      *  Tree::var().id() */
     boost::bimap<Clause::Id, Tree::Id> vars;
 
-    /*  Returns the total number of clauses (including X/Y/Z, variables, and
-     *  constants, which aren't explicitly in the tape )  */
+    std::map<Clause::Id, const Primitive*> primitives;
+
+    /*  Returns the total number of clauses (including primitives, variables, 
+     *  and constants, which aren't explicitly in the tape )  */
     size_t num_clauses;
 
 protected:

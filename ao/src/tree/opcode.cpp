@@ -16,6 +16,7 @@ size_t Opcode::args(Opcode op)
         case VAR_Y:
         case VAR_Z:
         case VAR:
+        case PRIMITIVE:
             return 0;
 
         case SQUARE: // fallthrough
@@ -118,7 +119,7 @@ Opcode::Opcode Opcode::fromScmString(std::string s)
     return itr != inverse.end() ? itr->second : INVALID;
 }
 
-std::string Opcode::toOpString(Opcode op)
+std::string Opcode::toOpString(Opcode op) //Currently just expresses all primitives as "primitive".
 {
     switch (op)
     {
@@ -127,6 +128,7 @@ std::string Opcode::toOpString(Opcode op)
         case VAR_Z: return "z";
 
         case VAR:
+        case PRIMITIVE:
         case SQUARE: // fallthrough
         case SQRT:
         case SIN:
@@ -170,6 +172,7 @@ bool Opcode::isCommutative(Opcode op)
         case VAR_Y:
         case VAR_Z:
         case VAR:
+        case PRIMITIVE:
         case SQUARE:
         case SQRT:
         case NEG:

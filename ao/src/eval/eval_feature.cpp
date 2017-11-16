@@ -10,9 +10,42 @@ FeatureEvaluator::FeatureEvaluator(std::shared_ptr<Tape> t)
 
 FeatureEvaluator::FeatureEvaluator(
         std::shared_ptr<Tape> t, const std::map<Tree::Id, float>& vars)
-    : DerivEvaluator(t, vars)
+    : DerivEvaluator(t, vars), dPrimAll(tape->num_clauses + 1)
 {
     // Nothing to do here
+}
+
+Eigen::Vector4f FeatureEvaluator::deriv(const Eigen::Vector3f& pt)
+{
+  //Load gradients of primitives; only use the first gradient of each here 
+  //(following precendent for min and max evaluation). 
+  for (auto prim : tape->primitives) {
+    dPrimAll(prim.first) = prim.second->getGradients(pt); //Other than this line, it's the same as the DerivEvaluator version.
+    d.col(prim.first) = *(dPrimAll(prim.first).begin());
+  }
+  // Perform value evaluation, saving results
+  auto w = eval(pt);
+  auto xyz = d.col(tape->rwalk(*this));
+  Eigen::Vector4f out;
+  out << xyz, w;
+  return out;
+}
+
+Eigen::Vector4f FeatureEvaluator::deriv(const Eigen::Vector3f& pt, const Feature& feature)
+{
+  if (feature.getPrimitiveChoices().empty())
+    return deriv(pt);
+  //Load gradients of ambiguous primitives (non-ambiguous ones are assumed to have already been loaded).
+  for (auto prim : feature.getPrimitiveChoices()) {
+    d.col(prim.id) = prim.choice;
+  }
+  // Perform derivative evaluation, saving results (value evaluation is assumed to have already been done.)
+  auto w = eval(pt);
+  auto xyz = d.col(tape->rwalk(*this));
+
+  Eigen::Vector4f out;
+  out << xyz, w;
+  return out;
 }
 
 Feature FeatureEvaluator::push(const Feature& feature)
@@ -34,7 +67,7 @@ Feature FeatureEvaluator::push(const Feature& feature)
             // or hit the end of the feature
             while (itr != choices.end() && itr->id < id) { itr++; }
 
-            // Push either the choice + epsilon or the bare cohice to the
+            // Push either the choice + epsilon or the bare choice to the
             // output feature, effectively pruning it to contain only the
             // choices that are actually significant in this subtree.
             if (itr != choices.end() && itr->id == id)
@@ -77,10 +110,11 @@ bool FeatureEvaluator::isInside(const Eigen::Vector3f& p)
     {
         bool ambig = false;
         tape->walk(
-            [&](Opcode::Opcode op, Clause::Id /* id */, Clause::Id a, Clause::Id b)
+            [&](Opcode::Opcode op, Clause::Id id, Clause::Id a, Clause::Id b)
             {
                 ambig |= (op == Opcode::MIN || op == Opcode::MAX) &&
                          (f(a) == f(b));
+                ambig |= (op == Opcode::PRIMITIVE && dPrimAll(id).size() > 1);
             }, ambig);
 
         if (!ambig)
@@ -141,16 +175,47 @@ std::list<Feature> FeatureEvaluator::featuresAt(const Eigen::Vector3f& p)
         // (storing a minimized version of the feature)
         auto f_ = push(feature);
 
-        // Run a single evaluation of the value + derivatives
-        // The value will be the same, but derivatives may change
-        // depending on which feature we've pushed ourselves into
-        const Eigen::Vector3f ds = deriv(p).template head<3>();
+        // Evaluate the derivatives at this point.
+        // The value will be the same throughout, but derivatives may change
+        // depending on which feature we're in.
+        // The first call has a blank feature, so populates non-ambiguous primitives
+        // and gets and stores all gradients for all primitives.
+        const Eigen::Vector3f ds = deriv(p, feature).template head<3>();
 
         bool ambiguous = false;
         tape->rwalk(
             [&](Opcode::Opcode op, Clause::Id id, Clause::Id a, Clause::Id b)
             {
-                if ((op == Opcode::MIN || op == Opcode::MAX))
+                if (op == Opcode::PRIMITIVE && dPrimAll(id).size() > 1) 
+                {
+                    const auto& choices = feature.getChoices();
+                    auto itr = choices.begin();
+                    while (itr != choices.end() && itr->id != id) { itr++; }
+                    if (itr == choices.end()) 
+                    {
+                      for (auto choice : dPrimAll(id)) 
+                      {
+                        auto fNew = f_;
+                        for (auto choice2 : dPrimAll(id)) {
+                          if (choice != choice2) {
+                            Primitive::prioritizationType prioritization = tape->primitives[id]->getPrioritizationType(p);
+                            Eigen::Vector3f epsilon;
+                            if (prioritization == Primitive::e_PRIMITIVE_MINIMUM)
+                              epsilon = choice2 - choice;
+                            else if (prioritization == Primitive::e_PRIMITIVE_MAXIMUM)
+                              epsilon = choice - choice2;
+                            if (!fNew.push(epsilon.template cast<double>(), { id, choice }))
+                              goto continueOuterLoop;
+                          }
+                        }
+                        ambiguous = true;
+                        todo.push_back(fNew);
+                        continueOuterLoop:
+                        ambiguous = ambiguous; //Because labels can't be at the end of blocks
+                      }
+                    }
+                }
+                else if ((op == Opcode::MIN || op == Opcode::MAX))
                 {
                     // If we've ended up with a non-selection, then collapse
                     // it to a single choice

@@ -97,16 +97,16 @@ ao_tree ao_tree_binary(int op, ao_tree a, ao_tree b);
 
 const void* ao_tree_id(ao_tree t);
 
-float ao_tree_eval_f(ao_tree t, ao_vec3 p);
+float ao_tree_eval_f(ao_tree t, ao_vec3 p); //does not work with primitives.
 
 bool ao_tree_eq(ao_tree a, ao_tree b);
 
 void ao_tree_delete(ao_tree ptr);
 
-bool ao_tree_save(ao_tree ptr, const char* filename);
-ao_tree ao_tree_load(const char* filename);
+bool ao_tree_save(ao_tree ptr, const char* filename); //does not work with primitives.
+ao_tree ao_tree_load(const char* filename); //does not work with primitives.
 
-ao_tree ao_tree_remap(ao_tree p, ao_tree x, ao_tree y, ao_tree z);
+ao_tree ao_tree_remap(ao_tree p, ao_tree x, ao_tree y, ao_tree z); //does not work with primitives.
 
 ////////////////////////////////////////////////////////////////////////////////
 

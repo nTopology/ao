@@ -28,9 +28,15 @@ PointEvaluator::PointEvaluator(
 
 float PointEvaluator::eval(const Eigen::Vector3f& pt)
 {
-    f(tape->X) = pt.x();
-    f(tape->Y) = pt.y();
-    f(tape->Z) = pt.z();
+    if (tape->XOpc)
+      f(tape->XOpc) = pt.x();
+    if (tape->YOpc)
+      f(tape->YOpc) = pt.y();
+    if (tape->ZOpc)
+      f(tape->ZOpc) = pt.z();        
+    for (auto prim : tape->primitives) {
+      f(prim.first) = prim.second->getValue(pt);
+    }
 
     return f(tape->rwalk(*this));
 }
@@ -187,6 +193,7 @@ void PointEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef out
