@@ -1,6 +1,8 @@
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4267") # int64 -> int
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # float -> int
+if(WIN32)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4267") # int64 -> int
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # float -> int
+endif()
 
 add_library(ao-kernel STATIC
     eval/base.cpp
@@ -55,7 +57,7 @@ add_library(ao-kernel STATIC
     ../include/ao/ao.h
 )
 
-target_link_libraries(ao-kernel PUBLIC boost eigen3 pngstatic ntglm)
+target_link_libraries(ao-kernel PUBLIC boost eigen3 ntglm)
 
 target_include_directories(ao-kernel PUBLIC
     ../include

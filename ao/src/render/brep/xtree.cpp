@@ -120,6 +120,7 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
   AtA(Eigen::Matrix<double, N, N>::Zero()),
   AtB(Eigen::Matrix<double, N, 1>::Zero())
 {
+/*
   assert(N == N2);
   if (cancel.load())
   {
@@ -145,7 +146,9 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
     // Recurse until volume is too small
     if (!node.isLeaf())
     {
-      MeshProximityTableInterface::BranchNodeInterface& branchNode = dynamic_cast<BranchNodeInterface&>(Node);
+      using BranchNodeInterface = typename MeshProximityTableInterface::BranchNodeInterface;
+
+      BranchNodeInterface& branchNode = dynamic_cast<BranchNodeInterface&>(Node);
       auto rs = std::vector<Node&>;
       for (i = 0; i < 8; ++i) {
         rs.push_back(branchNode.getChild(i));
@@ -352,7 +355,7 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
         targets[target_count] = { cornerPos(ps[vertex_count][target_count].first),
           cornerPos(ps[vertex_count][target_count].second) };
       }
-      //Unlike the original version, this doesn't use ArrayEvaluator's multi-point evaluation, 
+      //Unlike the original version, this doesn't use ArrayEvaluator's multi-point evaluation,
       //so there is no real benefit in having more points per search, so a simply binary search is used.
 
       constexpr int SEARCH_COUNT = 20;
@@ -492,9 +495,10 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
   }
 
   // ...and we're done.
+  */
 }
 
-  
+
 template <unsigned N>
 XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   double min_feature, double max_err, bool multithread,
@@ -875,7 +879,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             eval->feature.push(f);
 
             const auto ds = eval->feature.deriv(pos, f);
-                //If we hadn't loaded the derivatives for that point during featuresAt, 
+                //If we hadn't loaded the derivatives for that point during featuresAt,
                 //we'd need to do so first.
 
             // Unpack 3D derivatives into XTree-specific
@@ -992,7 +996,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   eval->interval.pop();
 }
 
-  
+
 
 ////////////////////////////////////////////////////////////////////////////////
 

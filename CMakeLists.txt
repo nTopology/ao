@@ -1,4 +1,7 @@
 #Ao
 
 add_subdirectory(ao)
-add_subdirectory(thirdparty/png)
+
+if(WIN32)
+  add_subdirectory(thirdparty/png)
+endif()

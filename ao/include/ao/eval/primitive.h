@@ -1,13 +1,13 @@
 // ============================================================================
 // Copyright 2017 nTopology Inc. All Rights Reserved.
-// 
+//
 // Author: Yitzhak
-// 
+//
 // ===========================================================================
 
 #pragma once
 #pragma warning(push, 0)
-#include <Eigen/eigen>
+#include <Eigen/Eigen>
 #include <set>
 #pragma warning( pop )
 #include "ao/render/brep/region.hpp"
@@ -23,7 +23,7 @@ class Primitive {
 public:
   enum prioritizationType {e_PRIMITIVE_MINIMUM, e_PRIMITIVE_MAXIMUM, e_PRIMITIVE_NEITHER};
 
-  virtual Interval :: I getRange (Region<2> region) const = 0; 
+  virtual Interval :: I getRange (Region<2> region) const = 0;
   virtual Interval :: I getRange (Region<3> region) const = 0;
     //If the range is larger than the actual range taken over the region,
     //everything will still work, but tighter ranges have better performance.

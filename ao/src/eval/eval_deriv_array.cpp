@@ -19,11 +19,11 @@ DerivArrayEvaluator::DerivArrayEvaluator(
     }
 
     // Load immutable derivatives for X, Y, Z
-    if (tape->XOpc != 0) 
+    if (tape->XOpc != 0)
       d(tape->XOpc).row(0) = 1;
-    if (tape->YOpc != 0) 
+    if (tape->YOpc != 0)
       d(tape->YOpc).row(1) = 1;
-    if (tape->ZOpc != 0) 
+    if (tape->ZOpc != 0)
       d(tape->ZOpc).row(2) = 1;
 }
 
@@ -33,7 +33,7 @@ Eigen::Vector4f DerivArrayEvaluator::deriv(const Eigen::Vector3f& pt)
     return derivs(1).col(0);
 }
 
-Eigen::Block<decltype(ArrayEvaluator::ambig), 1, Eigen::Dynamic>
+Eigen::Block<decltype(DerivArrayEvaluator::ambig), 1, Eigen::Dynamic>
 DerivArrayEvaluator::getAmbiguous(size_t i)
 {
   // Reset the ambiguous array to all false

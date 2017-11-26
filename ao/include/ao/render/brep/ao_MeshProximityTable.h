@@ -1,14 +1,14 @@
 // ============================================================================
 // Copyright 2017 nTopology Inc. All Rights Reserved.
-// 
+//
 // Author: Yitzhak
-// 
+//
 // ===========================================================================
 
 #pragma once
 #include <glm/glm.hpp>
 #pragma warning(push, 0)
-#include <Eigen/eigen>
+#include <Eigen/Eigen>
 #pragma warning( pop )
 
 //interface classes for icarus_MeshProximityTable, to avoid dependency loops.
@@ -28,7 +28,7 @@ public:
   virtual glm::vec3 getMaximalPoint() const = 0;
   virtual float getMinimumSignedSquaredDistance() const = 0;
   virtual float getMaximumSignedSquaredDistance() const = 0;
-  //Compares the distance from the first argument to the original manifold to the second argument.  
+  //Compares the distance from the first argument to the original manifold to the second argument.
   //-1 if the distance is less than the second argument, 0 if equal, 1 if more.
   virtual int compareDistance(const glm::vec3 point, const float distance)  const = 0;
   virtual float getSignedSquaredDistance(const glm::vec3 point) const = 0;
