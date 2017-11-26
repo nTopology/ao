@@ -59,6 +59,10 @@ add_library(ao-kernel STATIC
 
 target_link_libraries(ao-kernel PUBLIC boost eigen3 ntglm)
 
+if(WIN32)
+  target_link_libraries(ao-kernel PUBLIC pngstatic)
+endif()
+
 target_include_directories(ao-kernel PUBLIC
     ../include
 )
