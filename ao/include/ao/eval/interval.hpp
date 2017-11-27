@@ -11,7 +11,7 @@ typedef boost::numeric::interval<float,
             boost::numeric::interval_lib::rounded_transc_std<float>>,
         boost::numeric::interval_lib::checking_base<float>>> I;
 
-enum State { EMPTY, FILLED, AMBIGUOUS, UNKNOWN };
+enum State { EMPTY, FILLED, AMBIGUOUS, UNKNOWN, OUTOFSCOPE};
 
 inline bool isFilled(const Interval::I& i) { return i.upper() < 0; }
 inline bool isEmpty(const Interval::I& i)  { return i.lower() > 0; }

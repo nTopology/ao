@@ -20,43 +20,14 @@ std::unique_ptr<const Marching::MarchingTable<N>> XTree<N>::mt;
 ////////////////////////////////////////////////////////////////////////////////
 
 template <unsigned N>
-template <unsigned N2>
-std::unique_ptr<const XTree<N>> XTree<N>::build(
-  std::enable_if_t<N2 == 3, MeshProximityTableInterface&> table, float offset, double max_err, bool multithread, std::atomic_bool& cancel) {
-  return nullptr;
-}
-
-template <unsigned N>
-template <unsigned N2>
-std::unique_ptr<const XTree<N>> XTree<N>::build(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset,
-  double max_err, bool multithread, std::atomic_bool& cancel) {
-  assert(N == N2);
-  // Lazy initialization of marching squares / cubes table
-  if (mt.get() == nullptr)
-  {
-    mt = Marching::buildTable<N>();
-  }
-  auto out = new XTree(node, offset, max_err, multithread, cancel);
-
-  // Return an empty XTree when cancelled
-  // (to avoid potentially ambiguous or mal-constructed trees situations)
-  if (cancel.load())
-  {
-    delete out;
-    out = nullptr;
-  }
-
-  return std::unique_ptr<const XTree<N>>(out);
-}
-
-template <unsigned N>
 std::unique_ptr<const XTree<N>> XTree<N>::build(
   Tree t, Region<N> region, double min_feature,
-  double max_err, bool multithread)
+  double max_err, bool multithread,
+  bool useScope, const PartialOctree* const scope)
 {
   std::atomic_bool cancel(false);
   const std::map<Tree::Id, float> vars;
-  return build(t, vars, region, min_feature, max_err, multithread, cancel);
+  return build(t, vars, region, min_feature, max_err, multithread, cancel, useScope, scope);
 }
 
 template <unsigned N>
@@ -64,7 +35,8 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
   Tree t, const std::map<Tree::Id, float>& vars,
   Region<N> region, double min_feature,
   double max_err, bool multithread,
-  std::atomic_bool& cancel)
+  std::atomic_bool& cancel,
+  bool useScope, const PartialOctree* const scope)
 {
   if (multithread)
   {
@@ -74,12 +46,12 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
     {
       es.emplace_back(XTreeEvaluator(t, vars));
     }
-    return build(es.data(), region, min_feature, max_err, true, cancel);
+    return build(es.data(), region, min_feature, max_err, true, cancel, useScope, scope);
   }
   else
   {
     XTreeEvaluator e(t, vars);
-    return build(&e, region, min_feature, max_err, false, cancel);
+    return build(&e, region, min_feature, max_err, false, cancel, useScope, scope);
   }
 }
 
@@ -88,7 +60,8 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
   XTreeEvaluator* es,
   Region<N> region, double min_feature,
   double max_err, bool multithread,
-  std::atomic_bool& cancel)
+  std::atomic_bool& cancel,
+  bool useScope, const PartialOctree* const scope)
 {
   // Lazy initialization of marching squares / cubes table
   if (mt.get() == nullptr)
@@ -111,394 +84,10 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-
-template <unsigned N>
-template <unsigned N2>
-XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err,
-  bool multithread, std::atomic_bool& cancel)
-  : region(node.getMinimalPoint(), _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero())),
-  AtA(Eigen::Matrix<double, N, N>::Zero()),
-  AtB(Eigen::Matrix<double, N, 1>::Zero())
-{
-  assert(N == N2);
-  if (cancel.load())
-  {
-    return;
-  }
-
-  // Clear all indices
-  std::fill(index.begin(), index.end(), 0);
-
-  // Do a preliminary evaluation to prune the tree
-
-  if (node.getMinimumSignedSquaredDistance() > offset * std::abs(offset)) {
-    type = Interval::EMPTY;
-  }
-  else if (node.getMaximumSignedSquaredDistance() < offset * std::abs(offset)) {
-    type = Interval::FILLED;
-  }
-  // If the cell wasn't empty or filled, attempt to subdivide and recurse
-  else
-  {
-    bool all_empty = true;
-    bool all_full = true;
-    // Recurse until volume is too small
-    if (!node.isLeaf())
-    {
-      MeshProximityTableInterface::BranchNodeInterface& branchNode = dynamic_cast<BranchNodeInterface&>(Node);
-      auto rs = std::vector<Node&>;
-      for (i = 0; i < 8; ++i) {
-        rs.push_back(branchNode.getChild(i));
-      }
-      if (multithread)
-      {
-        // Evaluate every child in a separate thread
-        std::array<std::future<XTree<N>*>, 8> futures;
-
-        for (unsigned i = 0; i < children.size(); ++i)
-        {
-          futures[i] = std::async(std::launch::async,
-            [&offset, &rs, i, min_feature, max_err, &cancel]()
-          { return new XTree(
-            rs[i], offset, min_feature, max_err,
-            false, cancel); });
-        }
-        for (unsigned i = 0; i < children.size(); ++i)
-        {
-          children[i].reset(futures[i].get());
-        }
-      }
-      // Single-threaded recursive construction
-      else
-      {
-        for (uint8_t i = 0; i < children.size(); ++i)
-        {
-          // Populate child recursively
-          children[i].reset(new XTree<N>(
-            rs[i], offset, min_feature, max_err,
-            false, cancel));
-        }
-      }
-
-      // Abort early if children could have been mal-constructed
-      // by an early cancel operation
-      if (cancel.load())
-      {
-        return;
-      }
-      // Update corner and filled / empty state from children
-      for (uint8_t i = 0; i < children.size(); ++i)
-      {
-        // Grab corner values from children
-        corners[i] = children[i]->corners[i];
-
-        all_empty &= children[i]->type == Interval::EMPTY;
-        all_full &= children[i]->type == Interval::FILLED;
-      }
-    }
-    // Terminate recursion here
-    else
-    {
-      MeshProximityTableInterface::LeafNodeInterface& leafNode = dynamic_cast<LeafNodeInterface&>(Node);
-      // Pack corners into evaluator
-      std::array<Eigen::Vector3f, 8> pos;
-      for (uint8_t i = 0; i < children.size(); ++i)
-      {
-        pos[i] << cornerPos(i).template cast<float>();
-      }
-
-      // Evaluate the region's corners and check their states
-      for (uint8_t i = 0; i < children.size(); ++i)
-      {
-        // Handle inside, outside, and on-boundary.
-        glmPoint = glm::vec3(pos[i](0), pos[i](1), pos[i](2)) //To use the node, glm points are needed instead of Eigen.
-          auto testValue = node.compareDistance(glmPoint, offset);
-        if (testValue < 0) {
-          corners[i] = Interval::FILLED;
-        }
-        else if (testValue > 0) {
-          corners[i] = Interval::EMPTY;
-        }
-        else if (leafNode.isInsideIfBoundary(glmPoint, offset)) {
-          corners[i] = Interval::FILLED;
-        }
-        else {
-          corners[i] = Interval::EMPTY;
-        }
-      }
-
-      // Pack corners into filled / empty arrays
-      for (uint8_t i = 0; i < children.size(); ++i)
-      {
-        all_full &= corners[i];
-        all_empty &= !corners[i];
-      }
-    }
-    type = all_empty ? Interval::EMPTY
-      : all_full ? Interval::FILLED : Interval::AMBIGUOUS;
-  }
-
-  // If this cell is unambiguous, then fill its corners with values and
-  // forget all its branches; these may be no-ops, but they're idempotent
-  if (type == Interval::FILLED || type == Interval::EMPTY)
-  {
-    std::fill(corners.begin(), corners.end(), type);
-    std::for_each(children.begin(), children.end(),
-      [](std::unique_ptr<const XTree<N>>& o) { o.reset(); });
-    manifold = true;
-  }
-  // Build and store the corner mask
-  for (unsigned i = 0; i < children.size(); ++i)
-  {
-    corner_mask |= (corners[i] == Interval::FILLED) << i;
-  }
-  // Branch checking and simplifications
-  if (isBranch())
-  {
-    // Store this tree's depth as a function of its children
-    level = std::accumulate(children.begin(), children.end(), (unsigned)0,
-      [](const unsigned& a, const std::unique_ptr<const XTree<N>>& b)
-    { return std::max(a, b->level); }) + 1;
-
-    // If all children are non-branches, then we could collapse
-    if (std::all_of(children.begin(), children.end(),
-      [](const std::unique_ptr<const XTree<N>>& o)
-    { return !o->isBranch(); }))
-    {
-      //  This conditional implements the three checks described in
-      //  [Ju et al, 2002] in the section titled
-      //      "Simplification with topology safety"
-      manifold = cornersAreManifold() &&
-        std::all_of(children.begin(), children.end(),
-          [](const std::unique_ptr<const XTree<N>>& o)
-      { return o->manifold; }) &&
-        leafsAreManifold();
-
-      // Attempt to collapse this tree by positioning the vertex
-      // in the summed QEF and checking to see if the error is small
-      if (manifold)
-      {
-        // Populate the feature rank as the maximum of all children
-        // feature ranks (as seen in DC: The Secret Sauce)
-        rank = std::accumulate(
-          children.begin(), children.end(), (unsigned)0,
-          [](unsigned a, const std::unique_ptr<const XTree<N>>& b)
-        { return std::max(a, b->rank); });
-
-        // Accumulate the mass point and QEF matrices
-        for (const auto& c : children)
-        {
-          if (c->rank == rank)
-          {
-            _mass_point += c->_mass_point;
-          }
-          AtA += c->AtA;
-          AtB += c->AtB;
-          BtB += c->BtB;
-        }
-        assert(region.contains(massPoint()));
-        // If the vertex error is below a threshold, and the vertex
-        // is well-placed in the distance field, then convert into
-        // a leaf by erasing all of the child branches
-        auto vertexError = findVertex(vertex_count++);
-        glm::vec3 glmPoint(vert3()(0), vert3()(1), vert3()(2));
-        if (vertexError < max_err &&
-          node.getSignedSquaredDistance(glmPoint) < max_err * max_err) { //We want the regular (unsigned) square here.
-          std::for_each(children.begin(), children.end(),
-            [](std::unique_ptr<const XTree<N>>& o) { o.reset(); });
-        }
-        else
-        {
-          vertex_count = 0;
-        }
-      }
-    }
-  }
-  else if (type == Interval::AMBIGUOUS)
-  {
-    // Figure out if the leaf is manifold
-    manifold = cornersAreManifold();
-
-    // Here, we'll prepare to store position, {normal, value} pairs
-    // for every crossing and feature
-    typedef std::pair<Vec, Eigen::Matrix<double, N + 1, 1>> Intersection;
-    std::vector<Intersection, Eigen::aligned_allocator<Intersection>>
-      intersections;
-
-    // RAM is cheap, so reserve a bunch of space here to avoid
-    // the need for re-allocating later on
-    intersections.reserve(_edges(N) * 2);
-
-    // Iterate over manifold patches for this corner case
-    const auto& ps = mt->v[corner_mask];
-    while (vertex_count < ps.size() && ps[vertex_count][0].first != -1)
-    {
-      // Iterate over edges in this patch, storing [inside, outside]
-      unsigned target_count;
-      std::array<std::pair<Vec, Vec>, _edges(N)> targets;
-      std::array<int, _edges(N)> ranks;
-      std::fill(ranks.begin(), ranks.end(), -1);
-
-      for (target_count = 0; target_count < ps[vertex_count].size() &&
-        ps[vertex_count][target_count].first != -1; ++target_count)
-      {
-        // Sanity-checking
-        assert(corners[ps[vertex_count][target_count].first]
-          == Interval::FILLED);
-        assert(corners[ps[vertex_count][target_count].second]
-          == Interval::EMPTY);
-
-        // Store inside / outside in targets array
-        targets[target_count] = { cornerPos(ps[vertex_count][target_count].first),
-          cornerPos(ps[vertex_count][target_count].second) };
-      }
-      //Unlike the original version, this doesn't use ArrayEvaluator's multi-point evaluation, 
-      //so there is no real benefit in having more points per search, so a simply binary search is used.
-
-      constexpr int SEARCH_COUNT = 20;
-
-      // binary search for intersection
-      for (int s = 0; s < SEARCH_COUNT; ++s)
-      {
-        Eigen::Array<double, N, 2 * _edges(N)> ps;
-        for (unsigned e = 0; e < target_count; ++e)
-        {
-          ps.col(2 * e) = targets[e].first;
-          ps.cols(2 * e + 1) = targets[e].second;
-        }
-
-        // Evaluate, then adjust inside / outside to their new positions
-
-        for (unsigned e = 0; e < target_count; ++e)
-        {
-          Eigen::Vector3d mid = (targets[e].first + targets[e].second) / 2;
-          glm::vec3 glmMid(mid(0), mid(1), mid(2));
-          int testValue = node.compareDistance(glmMid, offset);
-          if (testValue < 0 || (testValue == 0 && leafNode.isInsideIfBoundary(glmMid, offset))) {
-            targets[e].first = mid;
-          }
-          else {
-            targets[e].second = mid;
-          }
-        }
-      }
-
-      // Reset mass point and intersections
-      _mass_point = _mass_point.Zero();
-      intersections.clear();
-
-      // Iterate over all inside-outside pairs, storing the number
-      // of intersections before each inside node (in prev_size), then
-      // checking the rank of the pair after each outside node based
-      // on the accumulated intersections.
-      size_t prev_size;
-      for (unsigned i = 0; i < target_count; ++i)
-      {
-        prev_size = intersections.size();
-        //No real point in distinguishing ambiguous cases from not with a MeshProximityTable.
-        std::vector<Eigen::Vector4d> derivs = leafNode.getNormalizedDerivsAndValues(glm::vec3(
-          targets[i].first(0), targets[i].first(1), targets[i].first(2)));
-        for (auto iter = derivs.begin(); iter != derivs.end(); ++iter) {
-          float normalizedOffset = offset / (std::sqrt(derivs(0) * derivs(0) + derivs(1) * derivs(1) + derivs(2) * derivs(2)));
-          //If denominator is 0, that means the gradient of the distance was 0, which should never happen.
-          derivs(3) -= normalizedOffset; //Because we want the distance from the offset, not from the original mesh.
-          intersections.push_back(targets[i].first, *iter);
-        }
-        derivs = leafNode.getNormalizedDerivsAndValues(glm::vec3(
-          targets[i].second(0), targets[i].second(1), targets[i].second(2)));
-        for (auto iter = derivs.begin(); iter != derivs.end(); ++iter) {
-          float normalizedOffset = offset / (std::sqrt(derivs(0) * derivs(0) + derivs(1) * derivs(1) + derivs(2) * derivs(2)));
-          derivs(3) -= normalizedOffset; //Because we want the distance from the offset, not from the original mesh.
-          intersections.push_back(targets[i].second, *iter);
-        }
-        // With a tree, every intersection being invalid is ?!, but here it should be completely impossible.
-        assert(prev_size < intersections.size());
-        ranks[i] = 1;
-        Vec prev_normal = intersections[prev_size]
-          .second
-          .template head<N>();
-        for (unsigned p = prev_size + 1;
-          p < intersections.size(); ++p)
-        {
-          // Accumulate rank based on cosine distance
-          ranks[i] += intersections[p]
-            .second
-            .template head<N>()
-            .dot(prev_normal) < 0.9;
-        }
-      }
-
-      {   // Build the mass point from max-rank intersections
-        const int max_rank = *std::max_element(
-          ranks.begin(), ranks.end());
-        for (unsigned i = 0; i < target_count; ++i)
-        {
-          assert(ranks[i] != -1);
-          if (ranks[i] == max_rank)
-          {
-            // Accumulate this intersection in the mass point
-            Eigen::Matrix<double, N + 1, 1> mp;
-            mp << targets[i].first, 1;
-            _mass_point += mp;
-            mp << targets[i].second, 1;
-            _mass_point += mp;
-          }
-        }
-      }
-
-      // Now, we'll unpack into A and b matrices
-      //
-      //  The A matrix is of the form
-      //  [n1x, n1y, n1z]
-      //  [n2x, n2y, n2z]
-      //  [n3x, n3y, n3z]
-      //  ...
-      //  (with one row for each sampled point's normal)
-      Eigen::Matrix<double, Eigen::Dynamic, N> A(intersections.size(), N);
-
-      //  The b matrix is of the form
-      //  [p1 . n1]
-      //  [p2 . n2]
-      //  [p3 . n3]
-      //  ...
-      //  (with one row for each sampled point)
-      Eigen::Matrix<double, Eigen::Dynamic, 1> b(intersections.size(), 1);
-
-      // Load samples into the QEF arrays
-      //
-      // Since we're deliberately sampling on either side of the
-      // intersection, we subtract out the distance-field value
-      // to make the math work out.
-      for (unsigned i = 0; i < intersections.size(); ++i)
-      {
-        A.row(i) << intersections[i].second
-          .template head<N>()
-          .transpose();
-        b(i) = A.row(i).dot(intersections[i].first) -
-          intersections[i].second(N);
-      }
-
-      // Save compact QEF matrices
-      auto At = A.transpose().eval();
-      AtA = At * A;
-      AtB = At * b;
-      BtB = b.transpose() * b;
-
-      // Find the vertex position, storing into the appropriate column
-      // of the vertex array and ignoring the error result (because
-      // this is the bottom of the recursion)
-      findVertex(vertex_count++);
-    }
-  }
-
-  // ...and we're done.
-}
-
-  
 template <unsigned N>
 XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   double min_feature, double max_err, bool multithread,
-  std::atomic_bool& cancel)
+  std::atomic_bool& cancel, bool useScope = false, const PartialOctree* const scope = nullptr)
   : region(region), _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero()),
   AtA(Eigen::Matrix<double, N, N>::Zero()),
   AtB(Eigen::Matrix<double, N, 1>::Zero())
@@ -506,6 +95,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   if (cancel.load())
   {
     return;
+  }
+  
+  if (useScope && scope == nullptr)
+  {
+    type = Interval::OUTOFSCOPE;
+    std::fill(corners.begin(), corners.end(), Interval::OUTOFSCOPE);
+    return; //This node of the tree won't be used, so nothing more needs to happen.
   }
 
   // Clear all indices
@@ -533,7 +129,6 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     if (((region.upper - region.lower) > min_feature).any())
     {
       auto rs = region.subdivide();
-
       if (multithread)
       {
         // Evaluate every child in a separate thread
@@ -544,10 +139,10 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
         for (unsigned i = 0; i < children.size(); ++i)
         {
           futures[i] = std::async(std::launch::async,
-            [&eval, &rs, i, min_feature, max_err, &cancel]()
+            [&eval, &rs, i, min_feature, max_err, &cancel, &useScope, &scope]()
           { return new XTree(
             eval + i, rs[i], min_feature, max_err,
-            false, cancel); });
+            false, cancel, useScope, useScope ? scope->children[i].get() : nullptr); });
         }
         for (unsigned i = 0; i < children.size(); ++i)
         {
@@ -562,7 +157,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
           // Populate child recursively
           children[i].reset(new XTree<N>(
             eval, rs[i], min_feature, max_err,
-            false, cancel));
+            false, cancel, useScope ? scope->children[i].get() : nullptr));
         }
       }
 
@@ -579,9 +174,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
       {
         // Grab corner values from children
         corners[i] = children[i]->corners[i];
-
-        all_empty &= children[i]->type == Interval::EMPTY;
-        all_full &= children[i]->type == Interval::FILLED;
+        all_empty &= children[i]->type == Interval::EMPTY || children[i]->type == Interval::OUTOFSCOPE;
+        all_full &= children[i]->type == Interval::FILLED || children[i]->type == Interval::OUTOFSCOPE;
       }
     }
     // Terminate recursion here
@@ -630,6 +224,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
         all_empty &= !corners[i];
       }
     }
+    assert(!all_empty || !all_full); //If it's both, that means all children were out of scope, meaning that the scope 
+      //PartialOctree did not extend to the proper depth.
     type = all_empty ? Interval::EMPTY
       : all_full ? Interval::FILLED : Interval::AMBIGUOUS;
   }
@@ -1254,7 +850,5 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const
 // Explicit initialization of templates and templated methods.
 template class XTree<2>;
 template class XTree<3>;
-
-template std::unique_ptr<const XTree<3>> XTree<3>::build<3>(MeshProximityTableInterface&, float, double, bool, std::atomic_bool&);
 
 }   // namespace Kernel
