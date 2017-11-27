@@ -1,5 +1,5 @@
 // ============================================================================
-// Copyright 2017 nTopology Inc. All Rights Reserved.
+// Copyright 2017 nTopology Inc. All Rights Reserved. (provided we get ao under a different license)
 // 
 // Author: Yitzhak
 // 
