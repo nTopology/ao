@@ -61,8 +61,8 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
     std::array<Eigen::Vector3f, 4> norms;
     for (unsigned i=0; i < norms.size(); ++i)
     {
-        norms[i] = (verts[vs[(i + 3) % 4]] - verts[vs[i]]).cross
-                   (verts[vs[(i + 1) % 4]] - verts[vs[i]]).normalized();
+        norms[i] = (verts[vs[i ^ 1]] - verts[vs[i]]).cross
+                   (verts[vs[i ^ 2]] - verts[vs[i]]).normalized();
     }
     if (norms[0].dot(norms[3]) > norms[1].dot(norms[2]))
     {
