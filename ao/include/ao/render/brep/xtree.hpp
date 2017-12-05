@@ -12,7 +12,7 @@
 #include "ao/render/brep/marching.hpp"
 #include "ao/render/brep/eval_xtree.hpp"
 #include "ao/eval/interval.hpp"
-#include <ao/render/brep/ao_MeshProximityTable.h>
+#include <ao/render/brep/PartialOctree.h>
 
 namespace Kernel {
 
@@ -21,28 +21,13 @@ class XTree
 {
 public:
   /*
-  * XTree builder that uses a meshProximityTable and offset.  Unique to the icarus (NTopology) version 
-  * (not present in standard ao library).  Uses the table to determine the region included and the minimum feature size.
-  */
-  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-  static std::unique_ptr<const XTree<N>> build(
-    std::enable_if_t<N2 == 3, MeshProximityTableInterface&> table, float offset, double max_err = 1e-8, bool multithread = true,
-    std::atomic_bool& cancel = std::atomic_bool(false));
-  /*
-  * Constructs an octree from a meshProximityTable node and offset.  Unique to the icarus (NTopology) version.
-  * Uses the node to determine the region included and the minimum feature size.
-  */
-  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-  static std::unique_ptr<const XTree<N>> build(
-    std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err = 1e-8, bool multithread = true,
-    std::atomic_bool& cancel = std::atomic_bool(false));
-  /*
   *  Constructs an octree or quadtree by subdividing a region
   *  (unstoppable)
   */
   static std::unique_ptr<const XTree> build(
     Tree t, Region<N> region, double min_feature = 0.1,
-    double max_err = 1e-8, bool multithread = true);
+    double max_err = 1e-8, bool multithread = true,
+    bool useScope = false, const PartialOctree* const scope = nullptr);
 
   /*
   *  Fully-specified XTree builder (stoppable through cancel)
@@ -51,7 +36,8 @@ public:
     Tree t, const std::map<Tree::Id, float>& vars,
     Region<N> region, double min_feature,
     double max_err, bool multithread,
-    std::atomic_bool& cancel);
+    std::atomic_bool& cancel,
+    bool useScope = false, const PartialOctree* const scope = nullptr);
 
   /*
   *  XTree builder that re-uses existing evaluators
@@ -61,7 +47,8 @@ public:
     XTreeEvaluator* es,
     Region<N> region, double min_feature,
     double max_err, bool multithread,
-    std::atomic_bool& cancel);
+    std::atomic_bool& cancel,
+    bool useScope = false, const PartialOctree* const scope = nullptr);
 
   /*
   *  Checks whether this tree splits
@@ -169,13 +156,6 @@ protected:
   typedef Eigen::Matrix<double, N, 1> Vec;
 
   /*
-  *  Private constructor from meshProximityTable node and offset (icarus only).
-  */
-  template <unsigned N2 = N> //Dummy template argument; should never be used with explicit value different from N.
-  XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInterface&> node, float offset, double max_err,
-    bool multithread, std::atomic_bool& cancel);
-
-  /*
   *  Private constructor for XTree
   *
   *  If multiple evaluators are provided, then tree construction will
@@ -183,7 +163,8 @@ protected:
   */
   XTree(XTreeEvaluator* eval, Region<N> region,
     double min_feature, double max_err, bool multithread,
-    std::atomic_bool& cancel);
+    std::atomic_bool& cancel,
+    bool useScope = false, const PartialOctree* const scope = nullptr);
 
   /*
   *  Searches for a vertex within the XTree cell, using the QEF matrices

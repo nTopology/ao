@@ -141,6 +141,20 @@ void IntervalEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             out = (std::isnan(a.lower()) || std::isnan(a.upper())) ? b : a;
             break;
 
+        case Opcode::USEINTERVAL:
+            out = b;
+            break;
+
+        case Opcode::CLEANUNION:
+            out = Interval::I(a.lower() + b.lower() - sqrt(a.lower() * a.lower() + b.lower() * b.lower()),
+              a.upper() + b.upper() - sqrt(a.upper() * a.upper() + b.upper() * b.upper())); //Works because it's an increasing function.
+            break;
+
+        case Opcode::CLEANINTERSECT:
+            out = Interval::I(a.lower() + b.lower() + sqrt(a.lower() * a.lower() + b.lower() * b.lower()),
+              a.upper() + b.upper() + sqrt(a.upper() * a.upper() + b.upper() * b.upper()));
+            break;
+
         case Opcode::SQUARE:
             out = boost::numeric::square(a);
             break;
