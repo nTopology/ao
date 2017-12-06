@@ -91,6 +91,18 @@ void DerivEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             od = std::isnan(av) ? bd : ad;
             break;
 
+        case Opcode::USEINTERVAL:
+            od = ad;
+            break;
+
+        case Opcode::CLEANUNION:
+            od = ad + bd - (av * ad + bv * bd) / sqrt(av * av + bv * bv); //The factors of 2 cancel out.
+            break;
+
+        case Opcode::CLEANINTERSECT:
+            od = ad + bd + (av * ad + bv * bd) / sqrt(av * av + bv * bv);
+            break;
+
         case Opcode::SQUARE:
             od = ad * av * 2;
             break;

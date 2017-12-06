@@ -45,6 +45,9 @@ size_t Opcode::args(Opcode op)
         case NTH_ROOT:
         case MOD:
         case NANFILL:
+        case USEINTERVAL:
+        case CLEANUNION:
+        case CLEANINTERSECT:
             return 2;
 
         case INVALID: // fallthrough
@@ -147,6 +150,9 @@ std::string Opcode::toOpString(Opcode op) //Currently just expresses all primiti
         case MOD:
         case NANFILL:
         case ABS:
+        case USEINTERVAL:
+        case CLEANUNION:
+        case CLEANINTERSECT:
             return toScmString(op);
 
 
@@ -194,6 +200,7 @@ bool Opcode::isCommutative(Opcode op)
         case ABS:
         case RECIP:
         case CONST_VAR:
+        case USEINTERVAL:
         case LAST_OP:
             return false;
 
@@ -201,6 +208,8 @@ bool Opcode::isCommutative(Opcode op)
         case MUL:
         case MIN:
         case MAX:
+        case CLEANUNION:
+        case CLEANINTERSECT:
             return true;
     }
 

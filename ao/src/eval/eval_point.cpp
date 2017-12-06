@@ -146,6 +146,18 @@ void PointEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             out = std::isnan(a) ? b : a;
             break;
 
+        case Opcode::USEINTERVAL:
+          out = a;
+          break;
+
+        case Opcode::CLEANUNION:
+          out = a + b - sqrt(a * a + b * b);
+          break;
+
+        case Opcode::CLEANINTERSECT:
+          out = a + b + sqrt(a * a + b * b);
+          break;
+
         case Opcode::SQUARE:
             out = a * a;
             break;

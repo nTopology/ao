@@ -90,7 +90,9 @@ void edge3(const std::array<const XTree<3>*, 4> ts, V& v)
 {
     constexpr auto Q = Axis::Q(A);
     constexpr auto R = Axis::R(A);
-
+    if (std::any_of(ts.begin(), ts.end(),
+      [](const XTree<3>* t) { return t->type == Interval::OUTOFSCOPE; }))
+          return;
     if (std::any_of(ts.begin(), ts.end(),
         [](const XTree<3>* t){ return t->isBranch(); }))
     {
@@ -144,6 +146,9 @@ void edge3(const std::array<const XTree<3>*, 4> ts, V& v)
 template <typename V, Axis::Axis A>
 void face3(const std::array<const XTree<3>*, 2> ts, V& v)
 {
+    if (std::any_of(ts.begin(), ts.end(), 
+      [](const XTree<3>* t) { return t->type == Interval::OUTOFSCOPE; }))
+          return;
     if (std::any_of(ts.begin(), ts.end(),
         [](const XTree<3>* t){ return t->isBranch(); }))
     {
@@ -191,6 +196,8 @@ template <>
 template <typename V>
 void Dual<3>::walk(const XTree<3>* t, V& v)
 {
+    if (t->type == Interval::OUTOFSCOPE)
+        return; //We want to do nothing with it.
     if (t->isBranch())
     {
         // Recurse, calling the cell procedure for every child

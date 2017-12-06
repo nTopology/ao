@@ -134,6 +134,18 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
                 od.row(i) = av.isNaN().select(bd.row(i), ad.row(i));
             break;
 
+        case Opcode::USEINTERVAL:
+            od = ad;
+            break;
+
+        case Opcode::CLEANUNION:
+            od = ad + bd - ((ad.rowwise() * av + bd.rowwise() * bv).rowwise() / sqrt(av * av + bv * bv)); //The factors of 2 cancel out.
+            break;
+
+        case Opcode::CLEANINTERSECT:
+            od = ad + bd + ((ad.rowwise() * av + bd.rowwise() * bv).rowwise() / sqrt(av * av + bv * bv));
+             break;
+
         case Opcode::SQUARE:
             od = ad.rowwise() * av * 2;
             break;
