@@ -238,17 +238,19 @@ OP_UNARY(exp,       Kernel::Opcode::EXP)
 #define OP_BINARY(name, opcode) \
 Kernel::Tree name(const Kernel::Tree& a, const Kernel::Tree& b) \
     { return Kernel::Tree(opcode, a, b); }
-OP_BINARY(operator+,    Kernel::Opcode::ADD)
-OP_BINARY(operator*,    Kernel::Opcode::MUL)
-OP_BINARY(min,          Kernel::Opcode::MIN)
-OP_BINARY(max,          Kernel::Opcode::MAX)
-OP_BINARY(operator-,    Kernel::Opcode::SUB)
-OP_BINARY(operator/,    Kernel::Opcode::DIV)
-OP_BINARY(atan2,        Kernel::Opcode::ATAN2)
-OP_BINARY(pow,          Kernel::Opcode::POW)
-OP_BINARY(nth_root,     Kernel::Opcode::NTH_ROOT)
-OP_BINARY(mod,          Kernel::Opcode::MOD)
-OP_BINARY(nanfill,      Kernel::Opcode::NANFILL)
+OP_BINARY(operator+,      Kernel::Opcode::ADD)
+OP_BINARY(operator*,      Kernel::Opcode::MUL)
+OP_BINARY(min,            Kernel::Opcode::MIN)
+OP_BINARY(max,            Kernel::Opcode::MAX)
+OP_BINARY(operator-,      Kernel::Opcode::SUB)
+OP_BINARY(operator/,      Kernel::Opcode::DIV)
+OP_BINARY(atan2,          Kernel::Opcode::ATAN2)
+OP_BINARY(pow,            Kernel::Opcode::POW)
+OP_BINARY(nth_root,       Kernel::Opcode::NTH_ROOT)
+OP_BINARY(mod,            Kernel::Opcode::MOD)
+OP_BINARY(nanfill,        Kernel::Opcode::NANFILL)
+OP_BINARY(cleanUnion,     Kernel::Opcode::NANFILL)
+OP_BINARY(cleanIntersect, Kernel::Opcode::NANFILL)
 #undef OP_BINARY
 
 
