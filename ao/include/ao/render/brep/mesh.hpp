@@ -9,42 +9,43 @@
 
 namespace Kernel {
 
-class Mesh : public BRep<3> {
-public:
-    /*
-     *  Blocking, unstoppable render function
-     */
-    static std::unique_ptr<Mesh> render(const Tree t, const Region<3>& r,
-                                        double min_feature=0.1, double max_err=1e-8);
+	class Mesh : public BRep<3> {
+	public:
+		/*
+		 *  Blocking, unstoppable render function
+		 */
+		static std::unique_ptr<Mesh> render(const Tree t, const Region<3>& r,
+			double min_feature = 0.1, double max_err = 1e-8);
 
-    /*
-     *  Fully-specified render function
-     */
-    static std::unique_ptr<Mesh> render(
-            const Tree t, const std::map<Tree::Id, float>& vars,
-            const Region<3>& r, double min_feature, double max_err,
-            std::atomic_bool& cancel);
+		/*
+		 *  Fully-specified render function
+		 */
+		static std::unique_ptr<Mesh> render(
+			const Tree t, const std::map<Tree::Id, float>& vars,
+			const Region<3>& r, double min_feature, double max_err,
+			std::atomic_bool& cancel);
 
-    /*
-     *  Render function that re-uses evaluators
-     *  es must be a pointer to at least eight Evaluators
-     */
-    static std::unique_ptr<Mesh> render(
-            XTreeEvaluator* es,
-            const Region<3>& r, double min_feature, double max_err,
-            std::atomic_bool& cancel);
+		/*
+		 *  Render function that re-uses evaluators
+		 *  es must be a pointer to at least eight Evaluators
+		 */
+		static std::unique_ptr<Mesh> render(
+			XTreeEvaluator* es,
+			const Region<3>& r, double min_feature, double max_err,
+			std::atomic_bool& cancel);
 
-    /*
-     *  Writes the mesh to a file
-     */
-    bool saveSTL(const std::string& filename);
-
+		/*
+		 *  Writes the mesh to a file
+		 */
+		bool saveSTL(const std::string& filename, bool isBinary);
+		bool saveSTL(const std::string& filename) { return saveSTL(filename, true); }
     /*
      *  Merge multiple bodies and write them to a single file
      */
     static bool saveSTL(const std::string& filename,
-                        const std::list<const Mesh*>& meshes);
-
+                        const std::list<const Mesh*>& meshes, bool isBinary);
+	static bool saveSTL(const std::string& filename,
+		const std::list<const Mesh*>& meshes) { return saveSTL(filename, meshes, true); }
     /*
      *  Called by Dual::walk to construct the triangle mesh
      */

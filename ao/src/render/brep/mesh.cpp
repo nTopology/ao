@@ -6,6 +6,8 @@
 #include "ao/render/brep/xtree.hpp"
 #include "ao/render/brep/dual.hpp"
 
+#include "windows.h"
+
 namespace Kernel {
 
 template <Axis::Axis A, bool D>
@@ -45,6 +47,9 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
         {
             ts[i]->index[vi] = verts.size();
 
+            if (ts[i]->index[vi] == 18)
+              i = i;
+
             verts.push_back(ts[i]->vert(vi).template cast<float>());
         }
         vs[i] = ts[i]->index[vi];
@@ -59,20 +64,63 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
     // Pick a triangulation that prevents triangles from folding back
     // on each other by checking normals.
     std::array<Eigen::Vector3f, 4> norms;
-    for (unsigned i=0; i < norms.size(); ++i)
+
+    /*for (unsigned i=0; i < norms.size(); ++i)
     {
         norms[i] = (verts[vs[(i + 3) % 4]] - verts[vs[i]]).cross
                    (verts[vs[(i + 1) % 4]] - verts[vs[i]]).normalized();
-    }
-    if (norms[0].dot(norms[3]) > norms[1].dot(norms[2]))
+    }*/
+
+    //  2 3
+    //  0 1
+    norms[0] = (verts[vs[1]] - verts[vs[0]]).cross
+               (verts[vs[2]] - verts[vs[0]]).normalized();
+    norms[1] = (verts[vs[0]] - verts[vs[1]]).cross
+               (verts[vs[3]] - verts[vs[1]]).normalized();
+    norms[2] = (verts[vs[3]] - verts[vs[2]]).cross
+               (verts[vs[0]] - verts[vs[2]]).normalized();
+    norms[3] = (verts[vs[2]] - verts[vs[3]]).cross
+               (verts[vs[1]] - verts[vs[3]]).normalized();
+
+    float dot03 = norms[0].dot(norms[3]), dot12 = norms[1].dot(norms[2]);
+
+    char s[20];
+
+    if (dot03 > dot12)
     {
         branes.push_back({vs[0], vs[1], vs[2]});
         branes.push_back({vs[2], vs[1], vs[3]});
+
+        if (dot03 < -0.9f)
+        {
+            FILE *f = fopen("quads.txt", "a");
+            fprintf(f, "%g %g %g\n", verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]);
+            fclose(f);
+            char s[100];
+            sprintf(s, "xtree IDs: %d, %d, %d, %d\n", ts[0]->id, ts[1]->id, ts[2]->id, ts[3]->id);
+            OutputDebugString(s);
+        }
     }
     else
     {
         branes.push_back({vs[0], vs[1], vs[3]});
         branes.push_back({vs[0], vs[3], vs[2]});
+
+        if (dot12 < -0.9f)
+        {
+            FILE *f = fopen("quads.txt", "a");
+            fprintf(f, "%g %g %g\n", verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]);
+            fprintf(f, "%g %g %g\n", verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
+            fclose(f);
+            char s[100];
+            sprintf(s, "xtree IDs: %d, %d, %d, %d\n", ts[0]->id, ts[1]->id, ts[2]->id, ts[3]->id);
+            OutputDebugString(s);
+        }
     }
 }
 
@@ -160,65 +208,120 @@ void Mesh::line(Eigen::Vector3f a, Eigen::Vector3f b)
 ////////////////////////////////////////////////////////////////////////////////
 
 bool Mesh::saveSTL(const std::string& filename,
-                   const std::list<const Mesh*>& meshes)
+                   const std::list<const Mesh*>& meshes, bool isBinary)
 {
     if (!boost::algorithm::iends_with(filename, ".stl"))
     {
         std::cerr << "Mesh::saveSTL: filename \"" << filename
                   << "\" does not end in .stl" << std::endl;
     }
-    std::ofstream file;
-    file.open(filename, std::ios::out);
-    if (!file.is_open())
-    {
-        std::cout << "Mesh::saveSTL: could not open " << filename
-                  << std::endl;
-        return false;
-    }
 
-    // File header (giving human-readable info about file type)
-    std::string header = "This is a binary STL exported from Ao.";
-    file.write(header.c_str(), header.length());
+	if (isBinary)
+	{
+		std::ofstream file;
+		file.open(filename, std::ios::out);
+		if (!file.is_open())
+		{
+			std::cout << "Mesh::saveSTL: could not open " << filename
+				<< std::endl;
+			return false;
+		}
 
-    // Pad the rest of the header to 80 bytes
-    for (int i=header.length(); i < 80; ++i)
-    {
-        file.put(' ');
-    }
+		// File header (giving human-readable info about file type)
+		std::string header = "This is a binary STL exported from Ao.";
+		file.write(header.c_str(), header.length());
 
-    // Write the triangle count to the file
-    uint32_t num = std::accumulate(meshes.begin(), meshes.end(), (uint32_t)0,
-            [](uint32_t i, const Mesh* m){ return i + m->branes.size(); });
-    file.write(reinterpret_cast<char*>(&num), sizeof(num));
+		// Pad the rest of the header to 80 bytes
+		for (int i = header.length(); i < 80; ++i)
+		{
+			file.put(' ');
+		}
 
-    for (const auto& m : meshes)
-    {
-        for (const auto& t : m->branes)
-        {
-            // Write out the normal vector for this face (all zeros)
-            float norm[3] = {0, 0, 0};
-            file.write(reinterpret_cast<char*>(&norm), sizeof(norm));
+		// Write the triangle count to the file
+		uint32_t num = std::accumulate(meshes.begin(), meshes.end(), (uint32_t)0,
+			[](uint32_t i, const Mesh* m) { return i + m->branes.size(); });
+		file.write(reinterpret_cast<char*>(&num), sizeof(num));
 
-            // Iterate over vertices (which are indices into the verts list)
-            for (unsigned i=0; i < 3; ++i)
-            {
-                auto v = m->verts[t[i]];
-                float vert[3] = {v.x(), v.y(), v.z()};
-                file.write(reinterpret_cast<char*>(&vert), sizeof(vert));
-            }
+		for (const auto& m : meshes)
+		{
+			for (const auto& t : m->branes)
+			{
+				// Write out the normal vector for this face (all zeros)
+				float norm[3] = { 0, 0, 0 };
+				file.write(reinterpret_cast<char*>(&norm), sizeof(norm));
 
-            // Write out this face's attribute short
-            uint16_t attrib = 0;
-            file.write(reinterpret_cast<char*>(&attrib), sizeof(attrib));
-        }
-    }
+				// Iterate over vertices (which are indices into the verts list)
+				for (unsigned i = 0; i < 3; ++i)
+				{
+					auto v = m->verts[t[i]];
+					float vert[3] = { v.x(), v.y(), v.z() };
+					file.write(reinterpret_cast<char*>(&vert), sizeof(vert));
+				}
+
+				// Write out this face's attribute short
+				uint16_t attrib = 0;
+				file.write(reinterpret_cast<char*>(&attrib), sizeof(attrib));
+			}
+		}
+	}
+	else //ASCII
+	{
+		auto* stl_file = fopen(filename.c_str(), "w");
+		if (stl_file == NULL)
+		{
+			std::cerr << "IOError: " << filename << " could not be opened for writing." << std::endl;
+			return false;
+		}
+		fprintf(stl_file, "solid %s\n", filename.c_str());
+
+		for (const auto& m : meshes)
+		{
+			for (const auto& t : m->branes)
+			{
+				auto d1 = m->verts[t[1]] - m->verts[t[0]];
+				auto d2 = m->verts[t[2]] - m->verts[t[0]];
+				auto c = d1.cross(d2);
+				double d = c.dot(c);
+//				if (std::abs(d) < 0.000000000000000001)
+//					continue;
+
+				// Write out the normal vector for this face (all zeros)
+				fprintf(stl_file, "facet normal ");
+				fprintf(stl_file, "0 0 0\n");
+
+				fprintf(stl_file, "outer loop\n");
+
+				// Iterate over vertices (which are indices into the verts list)
+
+				for (unsigned i = 0; i < 3; ++i)
+				{
+					auto v = m->verts[t[i]];
+
+					double x, y, z, B = 1000000000;
+					x = std::round(v.x()*B) / B;
+					y = std::round(v.y()*B) / B;
+					z = std::round(v.z()*B) / B;
+
+					fprintf(stl_file,
+						"vertex %f %f %f\n",
+						(float)x,
+						(float)y,
+						(float)z);
+				}
+				fprintf(stl_file, "endloop\n");
+				fprintf(stl_file, "endfacet\n");
+			}
+		}
+		fprintf(stl_file, "endsolid %s\n", filename.c_str());
+		fclose(stl_file);
+	}
 
     return true;
 }
 
-bool Mesh::saveSTL(const std::string& filename)
+bool Mesh::saveSTL(const std::string& filename, bool isBinary)
 {
-    return saveSTL(filename, {this});
+	return saveSTL(filename, { this }, isBinary);
 }
 
 }   // namespace Kernel

@@ -10,6 +10,9 @@
 
 namespace Kernel {
 
+  static int xtree_id;
+  static double mpf = 0.1; // 10;
+
 //  Here's our cutoff value (with a value set in the header)
 template <unsigned N> constexpr double XTree<N>::EIGENVALUE_CUTOFF;
 
@@ -66,6 +69,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
   double max_err, bool multithread,
   std::atomic_bool& cancel)
 {
+  multithread = false;
   if (multithread)
   {
     std::vector<XTreeEvaluator, Eigen::aligned_allocator<XTreeEvaluator>> es;
@@ -120,6 +124,7 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
   AtA(Eigen::Matrix<double, N, N>::Zero()),
   AtB(Eigen::Matrix<double, N, 1>::Zero())
 {
+  id = xtree_id++;
   assert(N == N2);
   if (cancel.load())
   {
@@ -150,6 +155,7 @@ XTree<N>::XTree(std::enable_if_t<N2 == 3, MeshProximityTableInterface::NodeInter
       for (i = 0; i < 8; ++i) {
         rs.push_back(branchNode.getChild(i));
       }
+      multithread = false;
       if (multithread)
       {
         // Evaluate every child in a separate thread
@@ -503,6 +509,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   AtA(Eigen::Matrix<double, N, N>::Zero()),
   AtB(Eigen::Matrix<double, N, 1>::Zero())
 {
+  id = xtree_id++;
   if (cancel.load())
   {
     return;
@@ -533,7 +540,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     if (((region.upper - region.lower) > min_feature).any())
     {
       auto rs = region.subdivide();
-
+      multithread = false;
       if (multithread)
       {
         // Evaluate every child in a separate thread
@@ -976,10 +983,19 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
       }
 
       // Save compact QEF matrices
+
+      auto center = massPoint();
+
       auto At = A.transpose().eval();
       AtA = At * A;
       AtB = At * b;
       BtB = b.transpose() * b;
+
+      AtA(0, 0) += mpf;
+      AtA(1, 1) += mpf;
+      AtA(2, 2) += mpf;
+      AtB += mpf * center;
+      BtB += mpf * center.transpose() * center;
 
       // Find the vertex position, storing into the appropriate column
       // of the vertex array and ignoring the error result (because
@@ -992,43 +1008,149 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   eval->interval.pop();
 }
 
-  
 
 ////////////////////////////////////////////////////////////////////////////////
 
 template <unsigned N>
+typename XTree<N>::Vec XTree<N>::correctVertexPosition(Vec lower, Vec upper, Vec v)
+{
+  Vec center = (lower + upper) / 2, vv;
+  double q, eps = 0.000000001;
+  int i, j, k;
+
+  for (i = 0, j = 1, k = 2; i < 3; i++, j = (j + 1) % 3, k = (k + 1) % 3)
+  {
+    if (v(i) < lower(i))
+    {
+      q = (lower(i) - v(i)) / (center(i) - v(i));
+      vv = q * center + (1 - q) * v;
+      if (vv(j) > lower(j) - eps && vv(j) < upper(j) + eps && vv(k) > lower(k) - eps && vv(k) < upper(k) + eps)
+        return vv;
+    }
+  }
+  for (i = 0, j = 1, k = 2; i < 3; i++, j = (j + 1) % 3, k = (k + 1) % 3)
+  {
+    if (v(i) > upper(i))
+    {
+      q = (v(i) - upper(i)) / (v(i) - center(i));
+      vv = q * center + (1 - q) * v;
+      if (vv(j) > lower(j) - eps && vv(j) < upper(j) + eps && vv(k) > lower(k) - eps && vv(k) < upper(k) + eps)
+        return vv;
+    }
+  }
+  return v;
+}
+
+static double qMax = 0.0;
+
+template <unsigned N>
+void XTree<N>::maxOutBy(double &max)
+{
+  max = qMax;
+}
+
+template <unsigned N>
+void XTree<N>::outBy(Vec lower, Vec upper, Vec v)
+{
+  int i, j, k;
+  double q, max_q = 0.0;
+
+  for (i = 0, j = 1, k = 2; i < 3; i++, j = (j + 1) % 3, k = (k + 1) % 3)
+  {
+    if (v(i) < lower(i))
+    {
+      q = (lower(i) - v(i)) / (upper(i) - lower(i));
+      if (q > max_q)
+        max_q = q;
+    }
+  }
+  for (i = 0, j = 1, k = 2; i < 3; i++, j = (j + 1) % 3, k = (k + 1) % 3)
+  {
+    if (v(i) > upper(i))
+    {
+      q = (v(i) - upper(i)) / (upper(i) - lower(i));
+      if (q > max_q)
+        max_q = q;
+    }
+  }
+
+  if (max_q > qMax)
+    qMax = max_q;
+}
+
+template <unsigned N>
 double XTree<N>::findVertex(unsigned index)
 {
+  if (id == 266788)
+    index = index;
+
   Eigen::EigenSolver<Eigen::Matrix<double, N, N>> es(AtA);
   assert(_mass_point(N) > 0);
 
   // We need to find the pseudo-inverse of AtA.
   auto eigenvalues = es.eigenvalues().real();
+  double cutoff = EIGENVALUE_CUTOFF;
+  Vec v;
 
-  // Truncate near-singular eigenvalues in the SVD's diagonal matrix
-  Eigen::Matrix<double, N, N> D = Eigen::Matrix<double, N, N>::Zero();
-  for (unsigned i = 0; i < N; ++i)
+  while (true)
   {
-    D.diagonal()[i] = (std::abs(eigenvalues[i]) < EIGENVALUE_CUTOFF)
-      ? 0 : (1 / eigenvalues[i]);
+    // Truncate near-singular eigenvalues in the SVD's diagonal matrix
+    Eigen::Matrix<double, N, N> D = Eigen::Matrix<double, N, N>::Zero();
+    for (unsigned i = 0; i < N; ++i)
+    {
+      D.diagonal()[i] = (std::abs(eigenvalues[i]) < cutoff)
+        ? 0 : (1 / eigenvalues[i]);
+    }
+
+    // Get rank from eigenvalues
+    auto rank_ = rank;
+    if (!isBranch())
+    {
+      assert(index > 0 || rank == 0);
+      rank = D.diagonal().count();
+    }
+
+    // SVD matrices
+    auto U = es.eigenvectors().real().eval(); // = V
+
+                          // Pseudo-inverse of A
+    auto AtAp = (U * D * U.transpose()).eval();
+
+    // Solve for vertex position (minimizing distance to center)
+    auto center = massPoint();
+    v = AtAp * (AtB - (AtA * center)) + center;
+
+    if (v(0) >= region.lower(0) && v(1) >= region.lower(1) && v(2) >= region.lower(2) &&
+        v(0) <= region.upper(0) && v(1) <= region.upper(1) && v(2) <= region.upper(2))
+      break;
+
+    //v = correctVertexPosition(region.lower, region.upper, v);
+    outBy(region.lower, region.upper, v);
+    break;
+
+    if (rank == 0)
+    {
+      //assert(false);
+      // v = (region.lower + region.upper) / 2;
+      FILE *f_ = fopen("cutoffs.txt", "a");
+      fprintf(f_, "tree %d, index %d: failed even for cutoff %g\n", id, index, cutoff);
+      fclose(f_);
+      break;
+    }
+    double cutoff_ = 1000000000.0;
+    for (unsigned i = 0; i < N; ++i)
+    {
+      if (std::abs(eigenvalues[i]) < cutoff)
+        continue;
+      if (std::abs(eigenvalues[i]) < cutoff_)
+        cutoff_ = std::abs(eigenvalues[i]) + 0.000000001;
+    }
+    cutoff = cutoff_;
+    rank = rank_;
+    FILE *f = fopen("cutoffs.txt", "a");
+    fprintf(f, "tree %d, index %d: trying cutoff = %g\n", id, index, cutoff);
+    fclose(f);
   }
-
-  // Get rank from eigenvalues
-  if (!isBranch())
-  {
-    assert(index > 0 || rank == 0);
-    rank = D.diagonal().count();
-  }
-
-  // SVD matrices
-  auto U = es.eigenvectors().real().eval(); // = V
-
-                        // Pseudo-inverse of A
-  auto AtAp = (U * D * U.transpose()).eval();
-
-  // Solve for vertex position (minimizing distance to center)
-  auto center = massPoint();
-  Vec v = AtAp * (AtB - (AtA * center)) + center;
 
   // Store this specific vertex in the verts matrix
   verts.col(index) = v;

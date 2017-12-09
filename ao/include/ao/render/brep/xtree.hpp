@@ -20,6 +20,7 @@ template <unsigned N>
 class XTree
 {
 public:
+  int id;
   /*
   * XTree builder that uses a meshProximityTable and offset.  Unique to the icarus (NTopology) version 
   * (not present in standard ao library).  Uses the table to determine the region included and the minimum feature size.
@@ -164,6 +165,8 @@ public:
   *  initialized when needed */
   static std::unique_ptr<const Marching::MarchingTable<N>> mt;
 
+  static void maxOutBy(double &max);
+
 protected:
   /*  Helper typedef for N-dimensional column vector */
   typedef Eigen::Matrix<double, N, 1> Vec;
@@ -194,6 +197,14 @@ protected:
   *  Stores the vertex in vert and returns the QEF error
   */
   double findVertex(unsigned i = 0);
+
+  /*
+  *  Corrects above if vertex outside region
+  */
+  Vec correctVertexPosition(Vec lower, Vec upper, Vec v);
+
+  /**/
+  void outBy(Vec lower, Vec upper, Vec v);
 
   /*
   *  Returns edges (as indices into corners)

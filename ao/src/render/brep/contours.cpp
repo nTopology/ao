@@ -45,6 +45,9 @@ public:
             {
                 ts[i]->index[vi] = verts.size();
 
+                if (ts[i]->index[vi] == 18)
+                  i = i;
+
                 // Look up the appropriate vertex id
                 verts.push_back(ts[i]->vert(vi).template cast<float>());
             }
