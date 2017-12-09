@@ -204,6 +204,8 @@ OP_BINARY(pow);
 OP_BINARY(nth_root);
 OP_BINARY(mod);
 OP_BINARY(nanfill);
+OP_BINARY(cleanUnion);
+OP_BINARY(cleanIntersect);
 #undef OP_BINARY
 
 /*

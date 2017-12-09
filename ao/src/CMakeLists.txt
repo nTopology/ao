@@ -34,7 +34,7 @@ add_library(ao-kernel STATIC
     ../include/ao/render/brep/eval_xtree.hpp
     ../include/ao/render/brep/brep.hpp
     ../include/ao/render/brep/dual.hpp
-    ../include/ao/render/brep/ao_MeshProximityTable.h
+    ../include/ao/render/brep/PartialOctree.h
     ../include/ao/eval/primitive.h
     render/brep/contours.cpp
     ../include/ao/render/brep/contours.hpp
