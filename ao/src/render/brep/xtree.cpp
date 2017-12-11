@@ -847,7 +847,7 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Explicit initialization of templates and templated methods.
+// Explicit initialization of templates.
 template class XTree<2>;
 template class XTree<3>;
 
