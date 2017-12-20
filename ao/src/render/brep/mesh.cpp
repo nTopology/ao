@@ -10,6 +10,34 @@
 
 namespace Kernel {
 
+  static float minMaxDot = 1.f;
+  static float minMaxDotPts[12];
+  float getMinMaxDot(float *pts) 
+  { 
+    for (int i = 0; i < 12; i++)
+      pts[i] = minMaxDotPts[i];
+    return minMaxDot; 
+  }
+
+  void updateOutline(Eigen::Vector3f o[2], Eigen::Vector3f p, bool init)
+  {
+    if (init)
+    {
+      for (int i = 0; i < 3; i++)
+        o[0](i) = o[1](i) = p(i);
+    }
+    else
+    {
+      for (int i = 0; i < 3; i++)
+      {
+        if (p(i) < o[0](i))
+          o[0](i) = p(i);
+        if (p(i) > o[1](i))
+          o[1](i) = p(i);
+      }
+    }
+  }
+
 template <Axis::Axis A, bool D>
 void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
 {
@@ -82,26 +110,48 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
     norms[3] = (verts[vs[2]] - verts[vs[3]]).cross
                (verts[vs[1]] - verts[vs[3]]).normalized();
 
-    float dot03 = norms[0].dot(norms[3]), dot12 = norms[1].dot(norms[2]);
+    float dot03 = norms[0].dot(norms[3]), dot12 = norms[1].dot(norms[2]), maxDot;
 
-    char s[20];
+    char s[100];
+    Eigen::Vector3f red(1, 0, 0), white(1, 1, 1);
 
     if (dot03 > dot12)
     {
         branes.push_back({vs[0], vs[1], vs[2]});
         branes.push_back({vs[2], vs[1], vs[3]});
 
+        maxDot = dot03;
         if (dot03 < -0.9f)
         {
-            FILE *f = fopen("quads.txt", "a");
+          /*Eigen::Vector3f p0(verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]), 
+                          p1(verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]),
+                          p2(verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]),
+                          p3(verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]);
+          dbgAddLine(p0, p1, red);
+          dbgAddLine(p1, p2, red);
+          dbgAddLine(p2, p3, red);
+          dbgAddLine(p3, p0, red);
+          dbgAddLine(p0, p2, white);*/
+          //dbgAddPoint(p0, red);
+          //dbgAddPoint(p1, red);
+          //dbgAddPoint(p2, red);
+          //dbgAddPoint(p3, red);
+            /*FILE *f = fopen("quads.txt", "a");
             fprintf(f, "%g %g %g\n", verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]);
-            fclose(f);
-            char s[100];
+            fclose(f);*/
             sprintf(s, "xtree IDs: %d, %d, %d, %d\n", ts[0]->id, ts[1]->id, ts[2]->id, ts[3]->id);
             OutputDebugString(s);
+            /*sprintf(s, "%g %g %g\n", p0[0], p0[1], p0[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p1[0], p1[1], p1[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p2[0], p2[1], p2[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p3[0], p3[1], p3[2]);
+            OutputDebugString(s);*/
         }
     }
     else
@@ -109,18 +159,83 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
         branes.push_back({vs[0], vs[1], vs[3]});
         branes.push_back({vs[0], vs[3], vs[2]});
 
+        maxDot = dot12;
         if (dot12 < -0.9f)
         {
-            FILE *f = fopen("quads.txt", "a");
+          /*Eigen::Vector3f p0(verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]),
+                          p1(verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]),
+                          p2(verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]),
+                          p3(verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
+          dbgAddLine(p0, p1, red);
+          dbgAddLine(p1, p2, red);
+          dbgAddLine(p2, p3, red);
+          dbgAddLine(p3, p0, red);
+          dbgAddLine(p0, p2, white);*/
+          //dbgAddPoint(p0, red);
+          //dbgAddPoint(p1, red);
+          //dbgAddPoint(p2, red);
+          //dbgAddPoint(p3, red);
+            /*FILE *f = fopen("quads.txt", "a");
             fprintf(f, "%g %g %g\n", verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]);
             fprintf(f, "%g %g %g\n", verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
-            fclose(f);
-            char s[100];
+            fclose(f);*/
             sprintf(s, "xtree IDs: %d, %d, %d, %d\n", ts[0]->id, ts[1]->id, ts[2]->id, ts[3]->id);
             OutputDebugString(s);
+            /*sprintf(s, "%g %g %g\n", p0[0], p0[1], p0[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p1[0], p1[1], p1[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p2[0], p2[1], p2[2]);
+            OutputDebugString(s);
+            sprintf(s, "%g %g %g\n", p3[0], p3[1], p3[2]);
+            OutputDebugString(s);*/
         }
+    }
+    if (maxDot < -.9f)
+    {
+      Eigen::Vector3f p0(verts[vs[0]][0], verts[vs[0]][1], verts[vs[0]][2]),
+        p1(verts[vs[1]][0], verts[vs[1]][1], verts[vs[1]][2]),
+        p2(verts[vs[3]][0], verts[vs[3]][1], verts[vs[3]][2]),
+        p3(verts[vs[2]][0], verts[vs[2]][1], verts[vs[2]][2]);
+      dbgAddPoint(p0, red);
+      dbgAddPoint(p1, red);
+      dbgAddPoint(p2, red);
+      dbgAddPoint(p3, red);
+      Eigen::Vector3f outline[2];
+      updateOutline(outline, p0, true);
+      updateOutline(outline, p1, false);
+      updateOutline(outline, p2, false);
+      updateOutline(outline, p3, false);
+      Eigen::Vector3f diff = outline[1] - outline[0];
+      float d = sqrt(diff(0)*diff(0) + diff(1)*diff(1) + diff(2)*diff(2));
+      sprintf(s, "maxDot = %g, diag = %g\n", maxDot, d);
+      OutputDebugString(s);
+
+      for (int i = 0; i < 4; i++)
+      {
+        for (int j = 0; j < 3; j++)
+        {
+          if (verts[vs[i]][j] < ts[i]->region.lower[j] || verts[vs[i]][j] > ts[i]->region.upper[j])
+          {
+            sprintf(s, "OUTSIDE: %d (%s)\n", ts[i]->id, ts[i]->isBranch() ? "branch" : "leaf");
+            OutputDebugString(s);
+          }
+        }
+      }
+
+    }
+    if (maxDot < minMaxDot)
+    {
+      minMaxDot = maxDot;
+      for (int i = 0; i < 3; i++)
+      {
+        minMaxDotPts[i] = verts[vs[0]][i];
+        minMaxDotPts[3+i] = verts[vs[1]][i];
+        minMaxDotPts[6+i] = verts[vs[3]][i];
+        minMaxDotPts[9+i] = verts[vs[2]][i];
+      }
     }
 }
 
@@ -140,8 +255,7 @@ std::unique_ptr<Mesh> Mesh::render(
             std::atomic_bool& cancel)
 {
     // Create the octree (multithreaded and cancellable)
-    return mesh(XTree<3>::build(
-            t, vars, r, min_feature, max_err, true, cancel), cancel);
+    return mesh(XTree<3>::build(t, vars, r, min_feature, max_err, true, cancel), cancel);
 }
 
 std::unique_ptr<Mesh> Mesh::render(
@@ -156,6 +270,10 @@ std::unique_ptr<Mesh> Mesh::render(
 std::unique_ptr<Mesh> Mesh::mesh(std::unique_ptr<const XTree<3>> xtree,
                                  std::atomic_bool& cancel)
 {
+  char s[20];
+  sprintf(s, "### Meshing...\n");
+  OutputDebugString(s);
+
     // Perform marching squares
     auto m = std::unique_ptr<Mesh>(new Mesh());
 
@@ -191,6 +309,9 @@ std::unique_ptr<Mesh> Mesh::mesh(std::unique_ptr<const XTree<3>> xtree,
                         t->cornerPos(e.second).template cast<float>());
         }
 #endif
+        sprintf(s, "### Done.\n");
+        OutputDebugString(s);
+
         return m;
     }
 }

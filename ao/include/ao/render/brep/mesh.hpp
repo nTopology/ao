@@ -9,6 +9,8 @@
 
 namespace Kernel {
 
+  float getMinMaxDot(float *pts);
+
 	class Mesh : public BRep<3> {
 	public:
 		/*

@@ -8,9 +8,11 @@
 #include "ao/render/brep/xtree.hpp"
 #include "ao/render/axes.hpp"
 
+
 namespace Kernel {
 
-  static int xtree_id;
+  static int xtree_id = 0;
+  void resetXTreeId() { xtree_id = 0; }
   static double mpf = 0.1; // 10;
 
 //  Here's our cutoff value (with a value set in the header)
@@ -42,6 +44,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
   bool useScope, const PartialOctree* const scope)
 {
   multithread = false;
+
   if (multithread)
   {
     std::vector<XTreeEvaluator, Eigen::aligned_allocator<XTreeEvaluator>> es;
@@ -97,44 +100,132 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
   AtB(Eigen::Matrix<double, N, 1>::Zero())
 {
   id = xtree_id++;
+
+  if (id == 22082)
+  {
+    bool isLeaf = !isBranch();
+    FILE *f = fopen("data.txt", "a");
+    fprintf(f, "*** id = %d is %s a leaf\n", id, isLeaf ? "SO" : "NOT");
+    fclose(f);
+  }
+
+  if (                       ((id % 10000) == 0) 
+      //|| (id >= 3380000 && ((id % 1000) == 0))
+      //|| (id >= 3389000 && ((id % 100) == 0))
+      //|| (id >= 3389600)
+    )
+  {
+    //char s[20];
+    //sprintf(s, "ids%g.txt", min_feature);
+    //OutputDebugString(s);
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, " %d \n", id);
+    fclose(f);
+  }
+
+  if (id == 3389602)
+    id = id;
+
   if (cancel.load())
   {
     return;
   }
-  
+
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "129\n");
+    fclose(f);
+  }
+
   if (useScope && scope == nullptr)
   {
     type = Interval::OUTOFSCOPE;
     std::fill(corners.begin(), corners.end(), Interval::OUTOFSCOPE);
+
+    if (id == 3389602)
+    {
+      FILE *f = fopen("ids.txt", "a");
+      fprintf(f, "141\n");
+      fclose(f);
+    }
+
     return; //This node of the tree won't be used, so nothing more needs to happen.
+  }
+
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "151\n");
+    fclose(f);
   }
 
   // Clear all indices
   std::fill(index.begin(), index.end(), 0);
 
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "161\n");
+    fclose(f);
+  }
+
   // Do a preliminary evaluation to prune the tree
   auto i = eval->interval.evalAndPush(region.lower3().template cast<float>(),
     region.upper3().template cast<float>());
 
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "172\n");
+    fclose(f);
+  }
+
   if (Interval::isFilled(i))
   {
+    if (id == 3389602)
+    {
+      FILE *f = fopen("ids.txt", "a");
+      fprintf(f, "181\n");
+      fclose(f);
+    }
     type = Interval::FILLED;
   }
   else if (Interval::isEmpty(i))
   {
+    if (id == 3389602)
+    {
+      FILE *f = fopen("ids.txt", "a");
+      fprintf(f, "191\n");
+      fclose(f);
+    }
     type = Interval::EMPTY;
   }
   // If the cell wasn't empty or filled, attempt to subdivide and recurse
   else
   {
+    if (id == 3389602)
+    {
+      FILE *f = fopen("ids.txt", "a");
+      fprintf(f, "202\n");
+      fclose(f);
+    }
     bool all_empty = true;
     bool all_full = true;
 
     // Recurse until volume is too small
     if (((region.upper - region.lower) > min_feature).any())
     {
+      if (id == 3389602)
+      {
+        FILE *f = fopen("ids.txt", "a");
+        fprintf(f, "214\n");
+        fclose(f);
+      }
       auto rs = region.subdivide();
+
       multithread = false;
+
       if (multithread)
       {
         // Evaluate every child in a separate thread
@@ -175,6 +266,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
         return;
       }
 
+      if (id == 3389602)
+      {
+        FILE *f = fopen("ids.txt", "a");
+        fprintf(f, "240\n");
+        fclose(f);
+      }
+
       // Update corner and filled / empty state from children
       for (uint8_t i = 0; i < children.size(); ++i)
       {
@@ -187,14 +285,25 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     // Terminate recursion here
     else
     {
+      if (id == 3389602)
+      {
+        FILE *f = fopen("ids.txt", "a");
+        fprintf(f, "283\n");
+        fclose(f);
+      }
       // Pack corners into evaluator
       std::array<Eigen::Vector3f, 1 << N> pos;
       for (uint8_t i = 0; i < children.size(); ++i)
       {
+        if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "290: i = %d\n", i); fclose(f); }
         pos[i] << cornerPos(i).template cast<float>(),
           region.perp.template cast<float>();
+        if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "293\n"); fclose(f); }
         eval->array.set(pos[i], i);
+        if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "295\n"); fclose(f); }
       }
+
+      if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "295\n"); fclose(f); }
 
       // Evaluate the region's corners and check their states
       auto ds = eval->array.derivs(children.size());
@@ -213,14 +322,37 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
         }
       }
 
+      if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "314\n"); fclose(f); }
+
       // Separate pass for handling ambiguous corners
       for (uint8_t i = 0; i < children.size(); ++i)
       {
+        if (id == -1) //540) //84267816)
+          i = i;
         if (ds.col(i).w() == 0 && ambig(i))
         {
           corners[i] = eval->feature.isInside(pos[i])
             ? Interval::FILLED : Interval::EMPTY;
         }
+      }
+
+      if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "328\n"); fclose(f); }
+
+      if (id == 22082) //540) //84267816)
+      {
+        FILE *f = fopen("data.txt", "a");
+        Eigen::Vector3f black(0, 0, 0), white(1, 1, 1);
+        Eigen::Vector3f diag = (pos[7] - pos[0]) / 60, ctr = (pos[0] + pos[7]) / 2;
+        for (uint8_t i = 0; i < children.size(); ++i)
+        {
+          dbgAddBox(pos[i] - diag, pos[i] + diag, (corners[i] == Interval::FILLED) ? black : white);
+          fprintf(f, "%d: %d   (%g %g %g)\n", i, corners[i], pos[i][0], pos[i][1], pos[i][2]);
+          Eigen::Vector3f incr = (pos[i] - ctr) / 15;
+          for (int ii = 1; ii <= i; ii++)
+            dbgAddPoint(pos[i] + ii * incr, black);
+        }
+        fprintf(f, "------\n");
+        fclose(f);
       }
 
       // Pack corners into filled / empty arrays
@@ -229,11 +361,27 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
         all_full &= corners[i];
         all_empty &= !corners[i];
       }
+
+      if (id == 3389602) { FILE *f = fopen("ids.txt", "a"); fprintf(f, "295\n"); fclose(f); }
+    }
+
+    if (id == 3389602)
+    {
+      FILE *f = fopen("ids.txt", "a");
+      fprintf(f, "352\n");
+      fclose(f);
     }
     assert(!all_empty || !all_full); //If it's both, that means all children were out of scope, meaning that the scope 
       //PartialOctree did not extend to the proper depth.
     type = all_empty ? Interval::EMPTY
       : all_full ? Interval::FILLED : Interval::AMBIGUOUS;
+  }
+
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "345\n");
+    fclose(f);
   }
 
   // If this cell is unambiguous, then fill its corners with values and
@@ -577,6 +725,36 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
           intersections[i].second(N);
       }
 
+      if (id == 22082) //540) //84267816)
+      {
+        Eigen::Vector3f L, U, p, n, ppn, red(1, 0, 0), yellow(1, 1, 0), purple(1, 0, 1), diff, near;
+        for (int ii = 0; ii < 3; ii++)
+        {
+          L[ii] = region.lower[ii];
+          U[ii] = region.upper[ii];
+        }
+        dbgAddBox(L, U, yellow);
+        FILE *f = fopen("data.txt", "a");
+        for (unsigned i = 0; i < intersections.size(); ++i)
+        {
+          for (int ii = 0; ii < 3; ii++)
+          {
+            p[ii] = intersections[i].first[ii];
+            n[ii] = intersections[i].second[ii];
+            ppn[ii] = p[ii] + n[ii];
+          }
+          double nn = n[0] * n[0] + n[1] * n[1] + n[2] * n[2];
+          assert(nn > 0.999 && nn < 1.001);
+          dbgAddPoint(p, red);
+          dbgAddLine(p, ppn, purple);
+          fprintf(f, "(%g %g %g)   (%g %g %g)\n", intersections[i].first[0], intersections[i].first[1], intersections[i].first[2],
+            intersections[i].second[0], intersections[i].second[1], intersections[i].second[2]);
+          for (int ii = 0; ii < 3; ii++)
+            data.push_back(p[ii]);
+        }
+        fclose(f);
+      }
+
       // Save compact QEF matrices
 
       auto center = massPoint();
@@ -586,11 +764,11 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
       AtB = At * b;
       BtB = b.transpose() * b;
 
-      AtA(0, 0) += mpf;
+      /*AtA(0, 0) += mpf;
       AtA(1, 1) += mpf;
       AtA(2, 2) += mpf;
       AtB += mpf * center;
-      BtB += mpf * center.transpose() * center;
+      BtB += mpf * center.transpose() * center;*/
 
       // Find the vertex position, storing into the appropriate column
       // of the vertex array and ignoring the error result (because
@@ -601,6 +779,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
 
   // ...and we're done.
   eval->interval.pop();
+
+  if (id == 3389602)
+  {
+    FILE *f = fopen("ids.txt", "a");
+    fprintf(f, "723\n");
+    fclose(f);
+  }
 }
 
 
@@ -637,11 +822,13 @@ typename XTree<N>::Vec XTree<N>::correctVertexPosition(Vec lower, Vec upper, Vec
 }
 
 static double qMax = 0.0;
+static int qMaxId = -1;
 
 template <unsigned N>
-void XTree<N>::maxOutBy(double &max)
+void XTree<N>::maxOutBy(double &max, int &maxId)
 {
   max = qMax;
+  maxId = qMaxId;
 }
 
 template <unsigned N>
@@ -670,15 +857,15 @@ void XTree<N>::outBy(Vec lower, Vec upper, Vec v)
   }
 
   if (max_q > qMax)
+  {
     qMax = max_q;
+    qMaxId = id;
+  }
 }
 
 template <unsigned N>
 double XTree<N>::findVertex(unsigned index)
 {
-  if (id == 266788)
-    index = index;
-
   Eigen::EigenSolver<Eigen::Matrix<double, N, N>> es(AtA);
   assert(_mass_point(N) > 0);
 
@@ -715,12 +902,28 @@ double XTree<N>::findVertex(unsigned index)
     auto center = massPoint();
     v = AtAp * (AtB - (AtA * center)) + center;
 
+    if (id == 22082) //540) //84267816)
+    {
+      Eigen::Vector3f p, red(1, 0, 0);
+      p[0] = v[0]; p[1] = v[1]; p[2] = v[2];
+      dbgAddPoint(p, red);
+    }
+
     if (v(0) >= region.lower(0) && v(1) >= region.lower(1) && v(2) >= region.lower(2) &&
         v(0) <= region.upper(0) && v(1) <= region.upper(1) && v(2) <= region.upper(2))
       break;
 
+    //v = massPoint();
+    //break;
+
     //v = correctVertexPosition(region.lower, region.upper, v);
-    outBy(region.lower, region.upper, v);
+    if (!isBranch())
+    {
+      /*FILE *f = fopen("data.txt", "a");
+      fprintf(f, "*** id = %d\n", id);
+      fclose(f);*/
+      outBy(region.lower, region.upper, v);
+    }
     break;
 
     if (rank == 0)
@@ -971,5 +1174,64 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const
 // Explicit initialization of templates and templated methods.
 template class XTree<2>;
 template class XTree<3>;
+
+////////////////////////////////////////////////////////////////////////////////
+
+static std::vector<float> data;
+void getData(std::vector<float> *p_data) { *p_data = data; }
+
+static std::vector<Eigen::Vector3f> dbgPoints;
+static std::vector<Eigen::Vector3f> dbgPointColors;
+static std::vector<Eigen::Vector3f> dbgLines;
+static std::vector<Eigen::Vector3f> dbgLineColors;
+
+void dbgAddPoint(Eigen::Vector3f xyz, Eigen::Vector3f rgb)
+{
+  dbgPoints.push_back(xyz);
+  dbgPointColors.push_back(rgb);
+}
+
+void dbgAddLine(Eigen::Vector3f xyz1, Eigen::Vector3f xyz2, Eigen::Vector3f rgb)
+{
+  dbgLines.push_back(xyz1);
+  dbgLines.push_back(xyz2);
+  dbgLineColors.push_back(rgb);
+}
+
+void dbgAddBox(Eigen::Vector3f p000, Eigen::Vector3f p111, Eigen::Vector3f rgb)
+{
+  Eigen::Vector3f p001(p000[0], p000[1], p111[2]), p010(p000[0], p111[1], p000[2]),
+    p011(p000[0], p111[1], p111[2]), p100(p111[0], p000[1], p000[2]),
+    p101(p111[0], p000[1], p111[2]), p110(p111[0], p111[1], p000[2]);
+  dbgAddLine(p000, p001, rgb);
+  dbgAddLine(p001, p011, rgb);
+  dbgAddLine(p011, p010, rgb);
+  dbgAddLine(p010, p000, rgb);
+  dbgAddLine(p100, p101, rgb);
+  dbgAddLine(p101, p111, rgb);
+  dbgAddLine(p111, p110, rgb);
+  dbgAddLine(p110, p100, rgb);
+  dbgAddLine(p000, p100, rgb);
+  dbgAddLine(p001, p101, rgb);
+  dbgAddLine(p011, p111, rgb);
+  dbgAddLine(p010, p110, rgb);
+}
+
+void dbgGetPointsAndLines(std::vector<Eigen::Vector3f> &points, std::vector<Eigen::Vector3f> &pointColors,
+  std::vector<Eigen::Vector3f> &lines, std::vector<Eigen::Vector3f> &lineColors)
+{
+  points = dbgPoints;
+  pointColors = dbgPointColors;
+  lines = dbgLines;
+  lineColors = dbgLineColors;
+}
+
+void dbgClear()
+{
+  dbgPoints.resize(0);
+  dbgPointColors.resize(0);
+  dbgLines.resize(0);
+  dbgLineColors.resize(0);
+}
 
 }   // namespace Kernel

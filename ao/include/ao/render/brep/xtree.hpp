@@ -152,7 +152,7 @@ public:
   *  initialized when needed */
   static std::unique_ptr<const Marching::MarchingTable<N>> mt;
 
-  static void maxOutBy(double &max);
+  static void maxOutBy(double &max, int &maxId);
 
 protected:
   /*  Helper typedef for N-dimensional column vector */
@@ -239,4 +239,12 @@ template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() co
 
 extern template class XTree<2>;
 extern template class XTree<3>;
+
+void getData(std::vector<float> *p_data);
+void dbgAddPoint(Eigen::Vector3f xyz, Eigen::Vector3f rgb);
+void dbgAddLine(Eigen::Vector3f xyz1, Eigen::Vector3f xyz2, Eigen::Vector3f rgb);
+void dbgAddBox(Eigen::Vector3f p000, Eigen::Vector3f p111, Eigen::Vector3f rgb);
+void dbgGetPointsAndLines(std::vector<Eigen::Vector3f> &points, std::vector<Eigen::Vector3f> &pointColors,
+  std::vector<Eigen::Vector3f> &lines, std::vector<Eigen::Vector3f> &lineColors);
+void resetXTreeId();
 }   // namespace Kernel
