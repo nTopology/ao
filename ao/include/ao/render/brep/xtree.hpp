@@ -20,6 +20,7 @@ template <unsigned N>
 class XTree
 {
 public:
+
   /*
   *  Constructs an octree or quadtree by subdividing a region
   *  (unstoppable)
@@ -102,8 +103,10 @@ public:
   /*  Children pointers, if this is a branch  */
   std::array<std::unique_ptr<const XTree<N>>, 1 << N> children;
 
-  /*  level = max(map(level, children)) + 1  */
+  /*  level = max(map(level, children)) + 1, depth = parent.depth + 1.  
+  Level + depth may not be constant, due to dividing for bad vertices.*/
   unsigned level = 0;
+  const unsigned depth;
 
   /*  Vertex locations, if this is a leaf
   *
@@ -164,7 +167,8 @@ protected:
   XTree(XTreeEvaluator* eval, Region<N> region,
     double min_feature, double max_err, bool multithread,
     std::atomic_bool& cancel,
-    bool useScope = false, const PartialOctree* const scope = nullptr);
+    bool useScope = false, const PartialOctree* const scope = nullptr,
+    const unsigned depth = 0);
 
   /*
   *  Searches for a vertex within the XTree cell, using the QEF matrices
@@ -175,6 +179,12 @@ protected:
   *  Stores the vertex in vert and returns the QEF error
   */
   double findVertex(unsigned i = 0);
+
+  //Tests whether the resulting vertex is valid, i.e. inside the region or outside it in
+  //a manner that cannot lead to triangles that double over.  Returns a char whose bits
+  //indicate which axes are problematic and in which direction (the lowest N bits indicate a vertex
+  //that's too low in that dimension; the next N bits for a vertex that's too high).
+  char invalidVertex(Marching::PatchEdges<N> edges, Eigen::Matrix<double, N, 1> vertexToTest);
 
   /*
   *  Returns edges (as indices into corners)
@@ -191,6 +201,9 @@ protected:
   *  This implements the test from [Gerstner et al, 2000], as
   *  described in [Ju et al, 2002].
   */
+
+  Interval::State getChildCorner(XTreeEvaluator* eval, int childNo, int cornerNo) const; //Valid even if the child has not been constructed.
+
   bool cornersAreManifold() const;
 
   /*
@@ -201,7 +214,7 @@ protected:
   *  Returns true if the cell can be collapsed without changing topology
   *  (with respect to the leaves)
   */
-  bool leafsAreManifold() const;
+  bool leafsAreManifold(XTreeEvaluator* eval) const;
 
   /*  Mass point is the average intersection location *
   *  (the last coordinate is number of points summed) */
@@ -220,8 +233,8 @@ protected:
 template <> bool XTree<2>::cornersAreManifold() const;
 template <> bool XTree<3>::cornersAreManifold() const;
 
-template <> bool XTree<2>::leafsAreManifold() const;
-template <> bool XTree<3>::leafsAreManifold() const;
+template <> bool XTree<2>::leafsAreManifold(XTreeEvaluator* eval) const;
+template <> bool XTree<3>::leafsAreManifold(XTreeEvaluator* eval) const;
 
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const;
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const;

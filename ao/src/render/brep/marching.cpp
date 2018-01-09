@@ -291,7 +291,7 @@ void loadCases<3>(VertsToPatches<3>& t)
     push({1, 0});
 
     // Case 15
-    begin({0, 2, 3,5, 6});
+    begin({0, 2, 3, 5, 6});
     push({0, 1});
     push({3, 1});
     push({3, 7});

@@ -22,9 +22,58 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
             {0, A}};
         for (unsigned i=0; i < 4; ++i)
         {
-            es[i] = XTree<3>::mt->e[D ? ev[i].first  : ev[i].second]
+            es[i] = XTree<3>::mt->e[D ? ev[i].first  : ev[i].second] //first index is filled, second is empty.
                                    [D ? ev[i].second : ev[i].first];
             assert(es[i] != -1);
+        }
+        //Adjust edge indices in case of a doubly-used tree.
+        std::array<int, 2> doubled;
+        if (ts[0] == ts[1]) {
+            doubled[0] = 0;
+            doubled[1] = 1;
+        }
+        else if (ts[0] == ts[2]) {
+            doubled[0] = 0;
+            doubled[1] = 2;
+        }
+        else if (ts[3] == ts[1]) {
+            doubled[0] = 3;
+            doubled[1] = 1;
+        }
+        else if (ts[3] == ts[2]) {
+            doubled[0] = 3;
+            doubled[1] = 2;
+        }
+        else {
+          doubled [0] = -1;
+        }
+        if (doubled[0] != -1) {
+            //D ? ev[i].first : ev[i].second must be filled for at least one of the two doubled values, and
+            //D ? ev[i].second : ev[i].first must be empty for at least one.  If one of the i's fulfills both
+            //conditions, we want to use it.  Otherwise, we want to use the edge going from the both-filled to
+            //the both-empty.
+            int filledOrthogonalEdge = -1;
+            if (ts[doubled[0]]->cornerState(D ? ev[doubled[0]].first : ev[doubled[0]].second) == Interval::FILLED) {
+                if (ts[doubled[0]]->cornerState(D ? ev[doubled[0]].second : ev[doubled[0]].first) == Interval::EMPTY) {
+                    es[doubled[1]] = es[doubled[0]];
+                }
+                else {
+                    filledOrthogonalEdge = 0;
+                }
+            }
+            else {
+                assert(ts[doubled[1]]->cornerState(D ? ev[doubled[1]].first : ev[doubled[1]].second) == Interval::FILLED);
+                if (ts[doubled[1]]->cornerState(D ? ev[doubled[1]].second : ev[doubled[1]].first) == Interval::EMPTY) {
+                    es[doubled[0]] = es[doubled[1]];
+                }
+                else {
+                  filledOrthogonalEdge = 1;
+                }
+            }
+            if (filledOrthogonalEdge >= 0) {
+                es[doubled[0]] = es[doubled[1]] = XTree<3>::mt->e[ev[doubled[filledOrthogonalEdge]].first] 
+                                                                 [ev[doubled[1 - filledOrthogonalEdge]].first];
+            }
         }
     }
 
@@ -66,13 +115,21 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
     }
     if (norms[0].dot(norms[3]) > norms[1].dot(norms[2]))
     {
-        branes.push_back({vs[0], vs[1], vs[2]});
-        branes.push_back({vs[2], vs[1], vs[3]});
+      if (vs[0] != vs[1] && vs[0] != vs[2]) {
+        branes.push_back({ vs[0], vs[1], vs[2] });
+      }
+      if (vs[3] != vs[1] && vs[3] != vs[2]) {
+        branes.push_back({ vs[2], vs[1], vs[3] });
+      }
     }
     else
     {
-        branes.push_back({vs[0], vs[1], vs[3]});
-        branes.push_back({vs[0], vs[3], vs[2]});
+      if (vs[0] != vs[1] && vs[3] != vs[1]) {
+        branes.push_back({ vs[0], vs[1], vs[3] });
+      }
+      if (vs[0] != vs[2] && vs[3] != vs[2]) {
+        branes.push_back({ vs[0], vs[3], vs[2] });
+      }
     }
 }
 

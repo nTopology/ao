@@ -12,6 +12,10 @@ DerivEvaluator::DerivEvaluator(
         std::shared_ptr<Tape> t, const std::map<Tree::Id, float>& vars)
     : PointEvaluator(t, vars), d(3, tape->num_clauses + 1)
 {
+    // Initialize all derivatives to zero
+    
+    d = 0;
+    
     // Load immutable derivatives for XOpc, YOpc, ZOpc
     if (tape->XOpc != 0) 
       d(0, tape->XOpc) = 1.f;
@@ -19,7 +23,6 @@ DerivEvaluator::DerivEvaluator(
       d(1, tape->YOpc) = 1.f;
     if (tape->ZOpc != 0)
       d(2, tape->ZOpc) = 1.f;
-    //Load derivatives for primitives.
 }
 
 Eigen::Vector4f DerivEvaluator::deriv(const Eigen::Vector3f& pt)

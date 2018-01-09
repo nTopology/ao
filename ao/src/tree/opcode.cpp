@@ -165,7 +165,8 @@ std::string Opcode::toOpString(Opcode op) //Currently just expresses all primiti
 
         case INVALID: // fallthrough
         case CONST:
-        case LAST_OP: return "";
+        case LAST_OP: 
+        default: return "";
     }
 }
 
@@ -173,6 +174,14 @@ bool Opcode::isCommutative(Opcode op)
 {
     switch (op)
     {
+        case ADD: // fallthrough
+        case MUL:
+        case MIN:
+        case MAX:
+        case CLEANUNION:
+        case CLEANINTERSECT:
+            return true;
+
         case CONST: // fallthrough
         case VAR_X:
         case VAR_Y:
@@ -202,15 +211,8 @@ bool Opcode::isCommutative(Opcode op)
         case CONST_VAR:
         case USEINTERVAL:
         case LAST_OP:
+        default:
             return false;
-
-        case ADD: // fallthrough
-        case MUL:
-        case MIN:
-        case MAX:
-        case CLEANUNION:
-        case CLEANINTERSECT:
-            return true;
     }
 
 }

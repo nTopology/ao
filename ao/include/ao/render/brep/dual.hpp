@@ -119,9 +119,9 @@ void edge3(const std::array<const XTree<3>*, 4> ts, V& v)
          *  correct edge.  Instead, we need to look at corners for the smallest cell
          *  among the function arguments.
          */
-        const auto index = std::min_element(ts.begin(), ts.end(),
+        const auto index = std::max_element(ts.begin(), ts.end(),
                 [](const XTree<3>* a, const XTree<3>* b)
-                { return a->level < b->level; }) - ts.begin();
+                { return a->depth < b->depth; }) - ts.begin();
 
         constexpr std::array<uint8_t, 4> corners = {{Q|R, R, Q, 0}};
 

@@ -89,8 +89,8 @@ Tape::Tape(const Tree root)
 
     // Save old-style X, Y, Z ids, or 0 if they don't exist in the tree.
     XOpc = clauses.find(axes[0].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
-    YOpc = clauses.find(axes[1].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
-    ZOpc = clauses.find(axes[2].id()) != clauses.end() ? clauses.at(axes[0].id()) : 0;
+    YOpc = clauses.find(axes[1].id()) != clauses.end() ? clauses.at(axes[1].id()) : 0;
+    ZOpc = clauses.find(axes[2].id()) != clauses.end() ? clauses.at(axes[2].id()) : 0;
 
     // Store the index of the tree's root
     assert(clauses.at(root.id()) == 1);
