@@ -173,14 +173,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
 
       for (uint8_t i = 0; i < children.size(); ++i)
       {
-        all_full &= (corners[i] == Interval::EMPTY);
-        all_empty &= (corners[i] == Interval::FILLED);
+        all_full &= (corners[i] != Interval::EMPTY);
+        all_empty &= (corners[i] != Interval::FILLED);
       }
       assert(!all_empty || !all_full); //If it's both, that means all children were out of scope, meaning that the scope 
                                        //PartialOctree did not extend to the proper depth.
       type = all_empty ? Interval::EMPTY
         : all_full ? Interval::FILLED : Interval::AMBIGUOUS;
-
       // Build and store the corner mask
       for (unsigned i = 0; i < children.size(); ++i)
       {
