@@ -34,5 +34,10 @@ namespace Axis {
                static_cast<Axis>(-1);
     }
 
+    template <Axis A>
+    inline Eigen::Vector2f project(Eigen::Vector3f input) {
+      return { input(toIndex(Q(A))), input(toIndex(R(A))) };
+    }
+
 }   // namespace Axis
 }   // namespace Kernel

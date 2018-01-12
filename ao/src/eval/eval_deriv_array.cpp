@@ -108,6 +108,9 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             od = ad - bd;
             break;
         case Opcode::DIV:
+          /*for (auto i = 0; i < count; ++i) {
+            d(id).col(i) = d(a).col(i) * f(b, i) - d(b).col(i) * f(a, i) / (f(b, i) * f(b, i));
+            }*/
             od = (ad.rowwise()*bv - bd.rowwise()*av).rowwise() /
                  bv.pow(2);
             break;
