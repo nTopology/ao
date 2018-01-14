@@ -41,6 +41,7 @@ Kernel::Tree CSGUnion(Kernel::Tree tA, Kernel::Tree tB);
 Kernel::Tree CSGSubtract(Kernel::Tree tA, Kernel::Tree tB);
 Kernel::Tree CSGIntersect(Kernel::Tree tA, Kernel::Tree tB);
 
+Kernel::Tree CSGUnionRound(Kernel::Tree tA, Kernel::Tree tB, float r);
 
 //Offset: expand or contract t by r
 Kernel::Tree offset(Kernel::Tree t, float r);
@@ -52,6 +53,13 @@ Kernel::Tree shell(Kernel::Tree t, float r);
 //clearence: make sure A clears B by amount R
 //Expands Tb by r & then subtracts it from A 
 Kernel::Tree clearence(Kernel::Tree tA, Kernel::Tree tB, float r);
+
+//blend: blends tA with tB by r
+Kernel::Tree blend(Kernel::Tree tA, Kernel::Tree tB, float r);
+
+//loft: creates a surface between tA & tB in the z-Axis from zMin to zMax
+Kernel::Tree loft(Kernel::Tree tA, Kernel::Tree tB, float zMin, float zMax);
+
 
 //Transforms
 //Scale, Rotate, Move, Shear etc...

@@ -58,6 +58,25 @@ Kernel::Tree CSGIntersect(Kernel::Tree tA, Kernel::Tree tB)
   return max(tA, tB);
 }
 
+Kernel::Tree CSGUnionRound(Kernel::Tree tA, Kernel::Tree tB, float r)
+{
+  auto vc0 = r - tA;
+  auto vc1 = r - tB;
+
+  auto u0 = max(vc0, 0.f);
+  auto u1 = max(vc1, 0.f);
+   
+  auto len = sqrt(square(u0) + square(u1));
+
+  return max(r, min(tA, tB)) - len;
+//   // The "Round" variant uses a quarter-circle to join the two objects smoothly:
+//   float fOpUnionRound(float a, float b, float r)
+//   {
+//     vec2 u = max(vec2(r - a, r - b), vec2(0));
+//     return max(r, min(a, b)) - length(u);
+//   }
+}
+
 Kernel::Tree offset(Kernel::Tree t, float r)
 {
   return t + r;
@@ -71,6 +90,21 @@ Kernel::Tree shell(Kernel::Tree t, float r)
 Kernel::Tree clearence(Kernel::Tree tA, Kernel::Tree tB, float r)
 {
   return CSGSubtract(tA, offset(tB, r));
+}
+
+Kernel::Tree blend(Kernel::Tree tA, Kernel::Tree tB, float r)
+{
+  return CSGUnion(tA, 
+                  CSGUnion(tB, (sqrt(abs(tA)) + sqrt(abs(tB))) - r));
+}
+
+Kernel::Tree loft(Kernel::Tree tA, Kernel::Tree tB, float zMin, float zMax)
+{
+  return max(max((Tree::Z() - zMax), 
+                 (zMin - Tree::Z())),
+             (((Tree::Z() - zMin)*tB) + 
+             ((zMax - Tree::Z())*tA)) 
+             / (zMax - zMin));
 }
 
 Tree recurse(float x, float y, float scale, Eigen::Matrix4f M, int i)
