@@ -55,6 +55,16 @@ template <unsigned N>
 using EdgeToPatch = std::array<std::array<int, _edges(N) * 2>,
                                _pow(2, _verts(N))>;
 
+//FaceToPatch is indexed by [mask][face],
+//where face is 0 for the -x side, 1 for -y, 2 for -z, 3 for +x, 4 for +y, 5 for +z.
+//-1 means that there are no patches on that face; -2 means there are 2 patches on that face.
+template <unsigned N>
+using FacesToPatches = std::array<std::array<int, N * 2>, _pow(2, _verts(N))>;
+
+//CornerToPatch is indexed by corner number, and -1 for empty corners.
+template <unsigned N>
+using CornersToPatches = std::array<std::array<int, _verts(N)>, _pow(2, _verts(N))>;
+
 ////////////////////////////////////////////////////////////////////////////////
 
 template <unsigned N>
@@ -63,6 +73,8 @@ struct MarchingTable
     VertsToPatches<N> v;
     VertsToEdge<N> e;
     EdgeToPatch<N> p;
+    FacesToPatches<N> fp;
+    CornersToPatches<N> cp;
 };
 
 template <unsigned N>

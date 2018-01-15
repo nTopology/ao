@@ -481,7 +481,7 @@ std::unique_ptr<MarchingTable<N>> buildTable()
         }
     }
 
-    // Mark every vertex-pair-to-edge and edge-to-patch mapping as invalid
+    // Mark every vertex-pair-to-edge, edge-to-patch, face-to-patch, and corner-to-patch mapping as invalid
     for (unsigned i=0; i < table->e.size(); ++i)
     {
         std::fill(table->e[i].begin(), table->e[i].end(), -1);
@@ -489,6 +489,14 @@ std::unique_ptr<MarchingTable<N>> buildTable()
     for (unsigned i=0; i < table->p.size(); ++i)
     {
         std::fill(table->p[i].begin(), table->p[i].end(), -1);
+    }
+    for (unsigned i = 0; i < table->fp.size(); ++i)
+    {
+      std::fill(table->fp[i].begin(), table->fp[i].end(), -1);
+    }
+    for (unsigned i = 0; i < table->cp.size(); ++i)
+    {
+      std::fill(table->cp[i].begin(), table->cp[i].end(), -1);
     }
 
     // Assign every vertex pair in the table to an edge id
@@ -513,6 +521,21 @@ std::unique_ptr<MarchingTable<N>> buildTable()
 
                 // Store edge-to-patch mapping
                 table->p[i][edge] = p;
+
+                //Store face-to-patch mappings
+                for (auto face = 0; face < 2 * N; ++face) {
+                  if ((face >= N) != (bool)(verts.first & 1 << (face % N)) ||
+                    (face >= N) != (bool)(verts.second & 1 << (face % N)))
+                    continue;
+                  auto& fVal = table->fp[i][face];
+                  if (fVal == -1)
+                    fVal = p;
+                  else if (fVal != p && fVal != -2)
+                    fVal = -2;
+                }
+
+                //Store corner-to-patch mappings
+                table->cp[i][verts.first] = p;
             }
         }
     }

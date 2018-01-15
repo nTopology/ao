@@ -83,6 +83,9 @@ public:
     return out;
   }
 
+  //Finds the closest corner to a point.
+  int closestCorner(Eigen::Vector3f point) const;
+
   /*
   *  Returns the averaged mass point
   */
@@ -214,7 +217,12 @@ protected:
   *  Returns true if the cell can be collapsed without changing topology
   *  (with respect to the leaves)
   */
-  bool leafsAreManifold(XTreeEvaluator* eval) const;
+  bool leafsAreManifold() const;
+
+
+  //A weaker form of Gerstner's/Ju's test, ensuring topological validity but not stability/safety; as such, it is suitable
+  //for dividing nodes but not combining them.
+  bool facesAreManifold(XTreeEvaluator* eval) const;
 
   /*  Mass point is the average intersection location *
   *  (the last coordinate is number of points summed) */
@@ -233,11 +241,17 @@ protected:
 template <> bool XTree<2>::cornersAreManifold() const;
 template <> bool XTree<3>::cornersAreManifold() const;
 
-template <> bool XTree<2>::leafsAreManifold(XTreeEvaluator* eval) const;
-template <> bool XTree<3>::leafsAreManifold(XTreeEvaluator* eval) const;
+template <> bool XTree<2>::leafsAreManifold() const;
+template <> bool XTree<3>::leafsAreManifold() const;
+
+template <> bool XTree<2>::facesAreManifold(XTreeEvaluator* eval) const;
+template <> bool XTree<3>::facesAreManifold(XTreeEvaluator* eval) const;
 
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const;
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const;
+
+template <> int XTree<2>::closestCorner(Eigen::Vector3f point) const;
+template <> int XTree<3>::closestCorner(Eigen::Vector3f point) const;
 
 extern template class XTree<2>;
 extern template class XTree<3>;

@@ -12,6 +12,9 @@ template <Axis::Axis A, bool D>
 void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
 {
     int es[4];
+    std::array<int, 2> doubled{ -1, -1 };
+    int face = -1; //-x, -y, -z, +x, +y, +z
+    Eigen::Vector3f cornerFindingPoint;
     {   // Unpack edge vertex pairs into edge indices
         auto q = Axis::Q(A);
         auto r = Axis::R(A);
@@ -26,65 +29,44 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
                                    [D ? ev[i].second : ev[i].first];
             assert(es[i] != -1);
         }
-        //Adjust edge indices in case of a doubly-used tree.
-        std::array<int, 2> doubled;
+
+        //In case of a doubly-used tree, we won't choose the patch from the edge index, but rather choose based on the face and corner.
         if (ts[0] == ts[1]) {
-            doubled[0] = 0;
-            doubled[1] = 1;
+          doubled[0] = 0;
+          doubled[1] = 1;
+          face = Axis::toIndex(r) + 3;
         }
         else if (ts[0] == ts[2]) {
-            doubled[0] = 0;
-            doubled[1] = 2;
+          doubled[0] = 0;
+          doubled[1] = 2;
+          face = Axis::toIndex(q) + 3;
         }
         else if (ts[3] == ts[1]) {
-            doubled[0] = 3;
-            doubled[1] = 1;
+          doubled[0] = 3;
+          doubled[1] = 1;
+          face = Axis::toIndex(q); //The ev's share the absence of q.
         }
         else if (ts[3] == ts[2]) {
-            doubled[0] = 3;
-            doubled[1] = 2;
-        }
-        else {
-          doubled [0] = -1;
+          doubled[0] = 3;
+          doubled[1] = 2;
+          face = Axis::toIndex(r);
         }
         if (doubled[0] != -1) {
-            //D ? ev[i].first : ev[i].second must be filled for at least one of the two doubled values, and
-            //D ? ev[i].second : ev[i].first must be empty for at least one.  If one of the i's fulfills both
-            //conditions, we want to use it.  Otherwise, we want to use the edge going from the both-filled to
-            //the both-empty.
-            int filledOrthogonalEdge = -1;
-            if (ts[doubled[0]]->cornerState(D ? ev[doubled[0]].first : ev[doubled[0]].second) == Interval::FILLED) {
-                if (ts[doubled[0]]->cornerState(D ? ev[doubled[0]].second : ev[doubled[0]].first) == Interval::EMPTY) {
-                    es[doubled[1]] = es[doubled[0]];
-                }
-                else {
-                    filledOrthogonalEdge = 0;
-                }
-            }
-            else {
-                assert(ts[doubled[1]]->cornerState(D ? ev[doubled[1]].first : ev[doubled[1]].second) == Interval::FILLED);
-                if (ts[doubled[1]]->cornerState(D ? ev[doubled[1]].second : ev[doubled[1]].first) == Interval::EMPTY) {
-                    es[doubled[0]] = es[doubled[1]];
-                }
-                else {
-                  filledOrthogonalEdge = 1;
-                }
-            }
-            if (filledOrthogonalEdge >= 0) {
-                es[doubled[0]] = es[doubled[1]] = XTree<3>::mt->e[ev[doubled[filledOrthogonalEdge]].first] 
-                                                                 [ev[doubled[1 - filledOrthogonalEdge]].first];
-            }
+          cornerFindingPoint = ts[3 - doubled[0]]->cornerPos(D ? ev[3 - doubled[0]].first : ev[3 - doubled[0]].second).template cast<float>();
+            //It may not be on the edge that gave us the quad, but ts[3 - doubled[0]] must be smaller than ts[doubled[0]],
+            //and so it will be in the correct quadrant of the face.
         }
     }
 
     uint32_t vs[4];
     for (unsigned i=0; i < ts.size(); ++i)
     {
-        // Load either a patch-specific vertex (if this is a lowest-level,
-        // potentially non-manifold cell) or the default vertex
-        auto vi = ts[i]->level > 0
-            ? 0
-            : XTree<3>::mt->p[ts[i]->corner_mask][es[i]];
+        // Load the appropriate vertex
+        auto vi = doubled[0] == i || doubled[1] == i ?
+           XTree<3>::mt->fp[ts[i]->corner_mask][face] != -2 ?  
+            XTree<3>::mt->fp[ts[i]->corner_mask][face] : //Doubled, with a single vertex on this face.
+            XTree<3>::mt->cp[ts[i]->corner_mask][ts[i]->closestCorner(cornerFindingPoint)] : //Doubled, with two vertices on this face.
+            XTree<3>::mt->p[ts[i]->corner_mask][es[i]]; //Not doubled
         assert(vi != -1);
 
         // Sanity-checking manifoldness of collapsed cells
@@ -202,8 +184,8 @@ std::unique_ptr<Mesh> Mesh::mesh(std::unique_ptr<const XTree<3>> xtree,
                         t->cornerPos(e.second).template cast<float>());
         }
 #endif
-        //m->processNegativeTriangles();
-        //m->edgesToBranes.clear();
+        m->processNegativeTriangles();
+        m->edgesToBranes.clear();
         return m;
     }
 }
@@ -211,11 +193,29 @@ std::unique_ptr<Mesh> Mesh::mesh(std::unique_ptr<const XTree<3>> xtree,
 void Mesh::processNegativeTriangles() {
   while (!negativeTriangles.empty()) {
     auto triangle = negativeTriangles.back();
-    auto removedTriangleIndexLocation = edgesToBranes.find({ triangle.vertices[1], triangle.vertices[0] });
+    auto removedTriangleIndexLocation = edgesToBranes.find({ triangle.vertices(1), triangle.vertices(0) });
+    auto negativeTrianglesSwapped = 0;
     while (removedTriangleIndexLocation == edgesToBranes.end()) {
-      negativeTriangle* swappedNegativeTriangle;
+      negativeTriangle* swappedNegativeTriangle = nullptr;
       for (auto iter = negativeTriangles.begin(); iter != negativeTriangles.end(); ++iter) {
-        //tbc
+        if (iter->vertices(2) == triangle.vertices(0) && iter->vertices(1) == triangle.vertices(1) ||
+          iter->vertices(2) == triangle.vertices(1) && iter->vertices(0) == triangle.vertices(0)) {
+          swappedNegativeTriangle = &*iter;
+          break;
+        }
+        else if (iter->vertices(0) == triangle.vertices(1) && iter->vertices(1) == triangle.vertices(0)) {
+          assert(false); //It seems this should not happen; if it does, we've got problems (the negative triangles form a cycle).  Consider throwing an exception.
+          return; //If not in debug mode, return and get some sort of mesh.
+        }
+      }
+      assert(swappedNegativeTriangle);
+      std::swap(*swappedNegativeTriangle, negativeTriangles.back());
+      triangle = negativeTriangles.back();
+      removedTriangleIndexLocation = edgesToBranes.find({ triangle.vertices(1), triangle.vertices(0) });
+      ++negativeTrianglesSwapped;
+      if (negativeTrianglesSwapped >= negativeTriangles.size()) {
+        assert(false); //It seems this should not happen; if it does, we've got problems (the negative triangles form a cycle).  Consider throwing an exception.
+        return; //If not in debug mode, return and get some sort of mesh.
       }
     }
     auto removedTriangleIndex = edgesToBranes[{triangle.vertices[1], triangle.vertices[0]}];
@@ -242,8 +242,7 @@ void Mesh::processNegativeTriangles() {
 }
 
 void Mesh::addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D) {
-  branes.push_back(vertices); //remove and restore the rest after debug
-  /*auto scaledOutwardNormal = (verts[vertices(1)] - verts[vertices(0)]).cross(verts[vertices(2)] - verts[vertices(0)]); //No need to normalize here.
+  auto scaledOutwardNormal = (verts[vertices(1)] - verts[vertices(0)]).cross(verts[vertices(2)] - verts[vertices(0)]); //No need to normalize here.
   Eigen::Vector3f axisVector({ 0.f, 0.f, 0.f});
   axisVector(Axis::toIndex(A)) = D ? 1.f : -1.f;
   if (scaledOutwardNormal.dot(axisVector) < 0.f) { //We want to make it a negative triangle.
@@ -257,7 +256,7 @@ void Mesh::addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, boo
     edgesToBranes[{vertices(0), vertices(1)}] = branes.size() - 1;
     edgesToBranes[{vertices(1), vertices(2)}] = branes.size() - 1;
     edgesToBranes[{vertices(2), vertices(0)}] = branes.size() - 1;
-  }*/
+  }
 }
 
 void Mesh::removeTriangle(uint32_t target) { //Makes use of the fact that the order doesn't matter to efficiently perform a mid-vector deletion.

@@ -474,7 +474,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             }
             
             if (useScope || (newVert.transpose() * AtA * newVert - 2 * newVert.transpose() * AtB)[0] + BtB < max_err ||
-              !leafsAreManifold(eval)) {
+              !facesAreManifold(eval)) {
               verts.col(vertex_count - 1) = newVert;
             }
             else {
@@ -568,7 +568,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             std::all_of(children.begin(), children.end(),
               [](const std::unique_ptr<const XTree<N>>& o)
           { return o->manifold; }) &&
-            leafsAreManifold(eval);
+            leafsAreManifold();
 
           // Attempt to collapse this tree by positioning the vertex
           // in the summed QEF and checking to see if the error is small
@@ -750,26 +750,81 @@ typename XTree<N>::Vec XTree<N>::massPoint() const
 // Specializations for quadtree
 
 template <>
-bool XTree<2>::leafsAreManifold(XTreeEvaluator* eval) const
+bool XTree<2>::leafsAreManifold() const
 {
+
   /*  See detailed comment in Octree::leafTopology */
+
   const bool edges_safe =
-    (getChildCorner(eval, 0, Axis::X) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::X) == cornerState(Axis::X))
-    && (getChildCorner(eval, 0, Axis::Y) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::Y) == cornerState(Axis::Y))
-    && (getChildCorner(eval, Axis::X, Axis::X || Axis::Y) == cornerState(Axis::X) ||
-      getChildCorner(eval, Axis::X, Axis::X || Axis::Y) == cornerState(Axis::X | Axis::Y))
-    && (getChildCorner(eval, Axis::Y, Axis::X || Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, Axis::Y, Axis::X || Axis::Y) == cornerState(Axis::Y | Axis::X));
+
+    (child(0)->cornerState(Axis::X) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::X) == cornerState(Axis::X))
+
+    && (child(0)->cornerState(Axis::Y) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::Y) == cornerState(Axis::Y))
+
+    && (child(Axis::X)->cornerState(Axis::X | Axis::Y) == cornerState(Axis::X) ||
+
+      child(Axis::X)->cornerState(Axis::X | Axis::Y) == cornerState(Axis::X | Axis::Y))
+
+    && (child(Axis::Y)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y) ||
+
+      child(Axis::Y)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y | Axis::X));
+
+
 
   const bool faces_safe =
-    (getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::X) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::Y | Axis::X));
+
+    (child(0)->cornerState(Axis::Y | Axis::X) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::X) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y | Axis::X));
+
+
 
   return edges_safe && faces_safe;
+
+}
+
+template <>
+bool XTree<2>::facesAreManifold(XTreeEvaluator* eval) const
+{
+  //In the 2d case, this simply requires the same condition as edges_safe.
+
+  std::array<Interval::State, 4> edgeRequirements{ Interval::AMBIGUOUS, Interval::AMBIGUOUS, Interval::AMBIGUOUS, Interval::AMBIGUOUS };
+  if (cornerState(0) == cornerState(Axis::X)) 
+    edgeRequirements[0] = cornerState(0);
+  if (cornerState(Axis::Y) == cornerState(Axis::X | Axis::Y))
+    edgeRequirements[1] = cornerState(Axis::Y);
+  if (cornerState(0) == cornerState(Axis::Y))
+    edgeRequirements[2] = cornerState(0);
+  if (cornerState(Axis::X) == cornerState(Axis::X | Axis::Y))
+    edgeRequirements[1] = cornerState(Axis::X);
+
+  for (auto i = 0; i < 4; ++i) {
+    if (edgeRequirements[i] == Interval::AMBIGUOUS || edgeRequirements[i] == Interval::OUTOFSCOPE)
+      continue;
+    Eigen::Vector3d edgePoint;
+    edgePoint << region.center(), region.perp;
+    switch (i) {
+    case 0:
+      edgePoint.x() = region.lower.x();
+    case 1:
+      edgePoint.x() = region.upper.x();
+    case 2:
+      edgePoint.y() = region.lower.y();
+    case 3:
+      edgePoint.y() = region.upper.y();
+    }
+    if (eval->feature.isInside(edgePoint.template cast<float>()) != (edgeRequirements[i] == Interval::FILLED))
+      return false;
+  }
+  return true;
 }
 
 template <>
@@ -789,99 +844,193 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const
   return es;
 }
 
+template <>
+int XTree<2>::closestCorner(Eigen::Vector3f point) const {
+  return point.x() > region.center().x() + 2 * (point.y() > region.center().y());
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Specializations for octree
 template <>
-bool XTree<3>::leafsAreManifold(XTreeEvaluator* eval) const
+bool XTree<3>::leafsAreManifold() const
 {
+
   /*  - The sign in the middle of a coarse edge must agree with the sign of at
+
   *    least one of the edge’s two endpoints.
+
   *  - The sign in the middle of a coarse face must agree with the sign of at
+
   *    least one of the face’s four corners.
+
   *  - The sign in the middle of a coarse cube must agree with the sign of at
+
   *    least one of the cube’s eight corners.
+
   *  [Ju et al, 2002]    */
 
+
+
   // Check the signs in the middle of leaf cell edges
+
   const bool edges_safe =
-    (getChildCorner(eval, 0, Axis::Z) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::Z) == cornerState(Axis::Z))
-    && (getChildCorner(eval, 0, Axis::X) == cornerState(0) ||
-    getChildCorner(eval, 0, Axis::X) == cornerState(Axis::X))
-    && (getChildCorner(eval, 0, Axis::Y) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::Y) == cornerState(Axis::Y))
 
-    && (getChildCorner(eval, Axis::X, Axis::X || Axis::Y) == cornerState(Axis::X) ||
-      getChildCorner(eval, Axis::X, Axis::X || Axis::Y) == cornerState(Axis::X | Axis::Y))
-    && (getChildCorner(eval, Axis::X, Axis::X || Axis::Z) == cornerState(Axis::X) ||
-      getChildCorner(eval, Axis::X, Axis::X || Axis::Z) == cornerState(Axis::X | Axis::Z))
+    (child(0)->cornerState(Axis::Z) == cornerState(0) ||
 
-    && (getChildCorner(eval, Axis::Y, Axis::X || Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, Axis::Y, Axis::X || Axis::Y) == cornerState(Axis::Y | Axis::X))
-    && (getChildCorner(eval, Axis::Y, Axis::Z || Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, Axis::Y, Axis::Z || Axis::Y) == cornerState(Axis::Y | Axis::Z))
+      child(0)->cornerState(Axis::Z) == cornerState(Axis::Z))
 
-    && (getChildCorner(eval, Axis::Z, Axis::X || Axis::Z) == cornerState(Axis::Z) ||
-      getChildCorner(eval, Axis::Z, Axis::X || Axis::Z) == cornerState(Axis::Z | Axis::X))
-    && (getChildCorner(eval, Axis::Z, Axis::Y || Axis::Z) == cornerState(Axis::Z) ||
-      getChildCorner(eval, Axis::Z, Axis::Y || Axis::Z) == cornerState(Axis::Z | Axis::Y))
+    && (child(0)->cornerState(Axis::X) == cornerState(0) ||
 
-    && (getChildCorner(eval, Axis::X || Axis::Y, Axis::X || Axis::Y || Axis::Z) ==
+      child(0)->cornerState(Axis::X) == cornerState(Axis::X))
+
+    && (child(0)->cornerState(Axis::Y) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::Y) == cornerState(Axis::Y))
+
+
+
+    && (child(Axis::X)->cornerState(Axis::X | Axis::Y) == cornerState(Axis::X) ||
+
+      child(Axis::X)->cornerState(Axis::X | Axis::Y) == cornerState(Axis::X | Axis::Y))
+
+    && (child(Axis::X)->cornerState(Axis::X | Axis::Z) == cornerState(Axis::X) ||
+
+      child(Axis::X)->cornerState(Axis::X | Axis::Z) == cornerState(Axis::X | Axis::Z))
+
+
+
+    && (child(Axis::Y)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y) ||
+
+      child(Axis::Y)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y | Axis::X))
+
+    && (child(Axis::Y)->cornerState(Axis::Y | Axis::Z) == cornerState(Axis::Y) ||
+
+      child(Axis::Y)->cornerState(Axis::Y | Axis::Z) == cornerState(Axis::Y | Axis::Z))
+
+
+
+    && (child(Axis::X | Axis::Y)->cornerState(Axis::X | Axis::Y | Axis::Z) ==
+
       cornerState(Axis::X | Axis::Y) ||
-      getChildCorner(eval, Axis::X || Axis::Y, Axis::X || Axis::Y || Axis::Z) ==
+
+      child(Axis::X | Axis::Y)->cornerState(Axis::X | Axis::Y | Axis::Z) ==
+
       cornerState(Axis::X | Axis::Y | Axis::Z))
 
-    && (getChildCorner(eval, Axis::Z || Axis::Y, Axis::X || Axis::Y || Axis::Z) ==
+
+
+    && (child(Axis::Z)->cornerState(Axis::Z | Axis::X) == cornerState(Axis::Z) ||
+
+      child(Axis::Z)->cornerState(Axis::Z | Axis::X) == cornerState(Axis::Z | Axis::X))
+
+    && (child(Axis::Z)->cornerState(Axis::Z | Axis::Y) == cornerState(Axis::Z) ||
+
+      child(Axis::Z)->cornerState(Axis::Z | Axis::Y) == cornerState(Axis::Z | Axis::Y))
+
+
+
+    && (child(Axis::Z | Axis::X)->cornerState(Axis::Z | Axis::X | Axis::Y) ==
+
+      cornerState(Axis::Z | Axis::X) ||
+
+      child(Axis::Z | Axis::X)->cornerState(Axis::Z | Axis::X | Axis::Y) ==
+
+      cornerState(Axis::Z | Axis::X | Axis::Y))
+
+
+
+    && (child(Axis::Z | Axis::Y)->cornerState(Axis::Z | Axis::Y | Axis::X) ==
+
       cornerState(Axis::Z | Axis::Y) ||
-      getChildCorner(eval, Axis::Z || Axis::Y, Axis::X || Axis::Y || Axis::Z) ==
-      cornerState(Axis::X | Axis::Y | Axis::Z))
 
-    && (getChildCorner(eval, Axis::X || Axis::Z, Axis::X || Axis::Y || Axis::Z) ==
-      cornerState(Axis::X | Axis::Z) ||
-      getChildCorner(eval, Axis::X || Axis::Z, Axis::X || Axis::Y || Axis::Z) ==
-      cornerState(Axis::X | Axis::Y | Axis::Z));
+      child(Axis::Z | Axis::Y)->cornerState(Axis::Z | Axis::Y | Axis::X) ==
 
-  const bool faces_safe =
-    (getChildCorner(eval, 0, Axis::X || Axis::Z) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Z) == cornerState(Axis::X) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Z) == cornerState(Axis::Z) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Z) == cornerState(Axis::X | Axis::Z))
-    && (getChildCorner(eval, 0, Axis::Y || Axis::Z) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::Y || Axis::Z) == cornerState(Axis::Y) ||
-      getChildCorner(eval, 0, Axis::Y || Axis::Z) == cornerState(Axis::Z) ||
-      getChildCorner(eval, 0, Axis::Y || Axis::Z) == cornerState(Axis::Y | Axis::Z))
-    && (getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(0) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::X) ||
-      getChildCorner(eval, 0, Axis::X || Axis::Y) == cornerState(Axis::Y | Axis::X))
-
-    && (getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::X) == cornerState(Axis::X) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::X) == cornerState(Axis::X | Axis::Z) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::X) == cornerState(Axis::X | Axis::Y) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::X) ==
-      cornerState(Axis::X | Axis::Y | Axis::Z))
-    && (getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Y) == cornerState(Axis::Y) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Y) == cornerState(Axis::Y | Axis::Z) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Y) == cornerState(Axis::Y | Axis::X) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Y) ==
-      cornerState(Axis::Y | Axis::Z | Axis::X))
-    && (getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Z) == cornerState(Axis::Z) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Z) == cornerState(Axis::Z | Axis::Y) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Z) == cornerState(Axis::Z | Axis::X) ||
-      getChildCorner(eval, Axis::X | Axis::Y | Axis::Z, Axis::Z) ==
       cornerState(Axis::Z | Axis::Y | Axis::X));
 
+
+
+  const bool faces_safe =
+
+    (child(0)->cornerState(Axis::X | Axis::Z) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::X | Axis::Z) == cornerState(Axis::X) ||
+
+      child(0)->cornerState(Axis::X | Axis::Z) == cornerState(Axis::Z) ||
+
+      child(0)->cornerState(Axis::X | Axis::Z) == cornerState(Axis::X | Axis::Z))
+
+    && (child(0)->cornerState(Axis::Y | Axis::Z) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::Y | Axis::Z) == cornerState(Axis::Y) ||
+
+      child(0)->cornerState(Axis::Y | Axis::Z) == cornerState(Axis::Z) ||
+
+      child(0)->cornerState(Axis::Y | Axis::Z) == cornerState(Axis::Y | Axis::Z))
+
+    && (child(0)->cornerState(Axis::Y | Axis::X) == cornerState(0) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::X) ||
+
+      child(0)->cornerState(Axis::Y | Axis::X) == cornerState(Axis::Y | Axis::X))
+
+
+
+    && (child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::X) == cornerState(Axis::X) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::X) == cornerState(Axis::X | Axis::Z) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::X) == cornerState(Axis::X | Axis::Y) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::X) ==
+
+      cornerState(Axis::X | Axis::Y | Axis::Z))
+
+    && (child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Y) == cornerState(Axis::Y) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Y) == cornerState(Axis::Y | Axis::Z) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Y) == cornerState(Axis::Y | Axis::X) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Y) ==
+
+      cornerState(Axis::Y | Axis::Z | Axis::X))
+
+    && (child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Z) == cornerState(Axis::Z) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Z) == cornerState(Axis::Z | Axis::Y) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Z) == cornerState(Axis::Z | Axis::X) ||
+
+      child(Axis::X | Axis::Y | Axis::Z)->cornerState(Axis::Z) ==
+
+      cornerState(Axis::Z | Axis::Y | Axis::X));
+
+
+
   const bool center_safe =
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(0) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::X) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::Y) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::X | Axis::Y) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::Z) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::Z | Axis::X) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::Z | Axis::Y) ||
-    getChildCorner(eval, 0, Axis::X || Axis::Y || Axis::Z) == cornerState(Axis::Z | Axis::X | Axis::Y);
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(0) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::X) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::Y) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::X | Axis::Y) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::Z) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::Z | Axis::X) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::Z | Axis::Y) ||
+
+    child(0)->cornerState(Axis::X | Axis::Y | Axis::Z) == cornerState(Axis::Z | Axis::X | Axis::Y);
+
+
 
   return edges_safe && faces_safe && center_safe;
+
 }
 
 template <>
@@ -927,6 +1076,124 @@ bool XTree<3>::cornersAreManifold() const
     1,0,0,0,1,1,0,0,1,0,1,0,1,1,1,1,1,1,0,0,1,1,0,0,1,0,0,0,1,1,0,1,
     1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1 };
   return corner_table[corner_mask];
+}
+
+template <>
+bool XTree<3>::facesAreManifold(XTreeEvaluator* eval) const
+{
+  //In the 3d case, this requires that the center each edge match one of the adjacent corners, that the center of each face match one of the adjacent 
+  //edge-centers (not just corners, and that if a face has two opposite corners filled and two opposite corners empty, the edge-centers (and thus face-center) are all 
+  //empty.  (This last condition can be weakened, provided the two opposite corners do not connect and there is a way to determine which corner a given post-subdivision
+  //patch connects to.)
+
+  std::array<Interval::State, 12> edges{ Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN,
+     Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN, Interval::UNKNOWN };
+
+  std::array<int, 6> adjacentFilledEdgesToFaces; //lower x, lower y, lower z, upper x, upper y, upper z
+  std::array<int, 6> adjacentEmptyEdgesToFaces;
+
+  auto idx = 0;
+  for (auto dim = 0; dim < 3; ++dim) {
+    for (auto q = 0; q < 2; ++q) {
+      for (auto r = 0; r < 2; ++r, ++idx) {
+        auto axis = Axis::toAxis(dim);
+        assert(axis != -1);
+        auto firstCorner = q * Axis::Q(axis) | r * Axis::R(axis);
+        auto secondCorner = axis | firstCorner;
+        if (cornerState(firstCorner) == cornerState(secondCorner)) {
+          edges[idx] = cornerState(firstCorner);
+        }
+        else if (cornerState(firstCorner) == cornerState(secondCorner ^ Axis::Q(axis)) && cornerState(firstCorner ^ Axis::Q(axis)) == cornerState(secondCorner) ||
+          cornerState(firstCorner) == cornerState(secondCorner ^ Axis::R(axis)) && cornerState(firstCorner ^ Axis::R(axis)) == cornerState(secondCorner)) {
+          edges[idx] = Interval::EMPTY;
+        }
+        if (edges[idx] == Interval::EMPTY || edges[idx] == Interval::FILLED) {
+          auto edgePoint = region.center();
+          edgePoint(Axis::toIndex(Axis::Q(axis))) = q ? region.upper(Axis::toIndex(Axis::Q(axis))) : region.lower(Axis::toIndex(Axis::Q(axis)));
+          edgePoint(Axis::toIndex(Axis::R(axis))) = r ? region.upper(Axis::toIndex(Axis::R(axis))) : region.lower(Axis::toIndex(Axis::R(axis)));
+          if (eval->feature.isInside(edgePoint.template cast<float>()) != (edges[idx] == Interval::FILLED)) {
+            return false;
+          }
+        }
+        if (edges[idx] == Interval::EMPTY) {
+          ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+          ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+        }
+        else if (edges[idx] == Interval::FILLED) {
+          ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+          ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+        }
+      }
+    }
+  }
+  for (auto i = 0; i < 6; ++i) {
+    if (adjacentEmptyEdgesToFaces[i] > 0 && adjacentFilledEdgesToFaces[i] > 0)
+      continue;
+    else {
+      auto facePoint = region.center();
+      facePoint(i % 3) = (i < 3 ? region.lower(i % 3) : region.upper(i % 3));
+      if (eval->feature.isInside(facePoint.template cast<float>())) {
+        for (auto j = 0; j < 4; ++j) {
+          if (adjacentFilledEdgesToFaces[i] > 0)
+            break;
+          auto axis = (j < 2 ? Axis::Q(Axis::toAxis(i % 3)) : Axis::R(Axis::toAxis(i % 3)));
+          auto q = (j < 2 ? j == 0 : i >= 3); //Second is since Q(R(axis)) is just axis.
+          auto r = (j < 2 ? i >= 3 : j == 2); //First is since R(Q(axis)) is just axis.
+          auto idx = Axis::toIndex(axis) * 4 + q * 2 + r;
+          if (edges[idx] == Interval::UNKNOWN) {
+            auto edgePoint = region.center();
+            edgePoint(Axis::toIndex(Axis::Q(axis))) = q ? region.upper(Axis::toIndex(Axis::Q(axis))) : region.lower(Axis::toIndex(Axis::Q(axis)));
+            edgePoint(Axis::toIndex(Axis::R(axis))) = r ? region.upper(Axis::toIndex(Axis::R(axis))) : region.lower(Axis::toIndex(Axis::R(axis)));
+            if (eval->feature.isInside(edgePoint.template cast<float>())) {
+              edges[idx] = Interval::FILLED;
+              ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+              ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+            }
+            else {
+              edges[idx] = Interval::EMPTY;
+              ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+              ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+            }
+          }
+        }
+        if (adjacentFilledEdgesToFaces[i] == 0)
+          return false;
+      }
+      else {
+        for (auto j = 0; j < 4; ++j) {
+          if (adjacentEmptyEdgesToFaces[i] > 0)
+            break;
+          auto axis = (j < 2 ? Axis::Q(Axis::toAxis(i % 3)) : Axis::R(Axis::toAxis(i % 3)));
+          auto q = (j < 2 ? j == 0 : i >= 3); //Second is since Q(R(axis)) is just axis.
+          auto r = (j < 2 ? i >= 3 : j == 2); //Second is since R(Q(axis)) is just axis.
+          auto idx = Axis::toIndex(axis) * 4 + q * 2 + r;
+          if (edges[idx] == Interval::UNKNOWN) {
+            auto edgePoint = region.center();
+            edgePoint(Axis::toIndex(Axis::Q(axis))) = q ? region.upper(Axis::toIndex(Axis::Q(axis))) : region.lower(Axis::toIndex(Axis::Q(axis)));
+            edgePoint(Axis::toIndex(Axis::R(axis))) = r ? region.upper(Axis::toIndex(Axis::R(axis))) : region.lower(Axis::toIndex(Axis::R(axis)));
+            if (eval->feature.isInside(edgePoint.template cast<float>())) {
+              edges[idx] = Interval::FILLED;
+              ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+              ++adjacentFilledEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+            }
+            else {
+              edges[idx] = Interval::EMPTY;
+              ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + q * 3];
+              ++adjacentEmptyEdgesToFaces[Axis::toIndex(Axis::Q(axis)) + r * 3];
+            }
+          }
+        }
+        if (adjacentEmptyEdgesToFaces[i] == 0)
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <>
+int XTree<3>::closestCorner(Eigen::Vector3f point) const {
+  return point.x() > region.center().x() + 2 * (point.y() > region.center().y()) + 4 * (point.z() > region.center().z());
 }
 
 template <>
