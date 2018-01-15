@@ -1,35 +1,56 @@
-if(MSVC)
-    set(LINK_TYPE STATIC)
-else()
-    set(LINK_TYPE SHARED)
-endif()
 
-# Add a custom command that produces version.cpp, plus
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4267") # int64 -> int
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # float -> int
 
-# a dummy output that's not actually produced, in order
-# to force version.cmake to always be re-run before the build
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/version.c
-           ${CMAKE_CURRENT_BINARY_DIR}/_version.c
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake)
+add_library(ao-kernel STATIC
+   ../include/libfive/eval/base.hpp
+   ../include/libfive/eval/clause.hpp
+   ../include/libfive/eval/eval_affine.hpp
+   ../include/libfive/eval/eval_array.hpp
+   ../include/libfive/eval/eval_deriv.hpp
+   ../include/libfive/eval/eval_deriv_array.hpp
+   ../include/libfive/eval/eval_feature.hpp
+   ../include/libfive/eval/eval_interval.hpp
+   ../include/libfive/eval/eval_jacobian.hpp
+   ../include/libfive/eval/eval_point.hpp
+   ../include/libfive/eval/feature.hpp
+   ../include/libfive/eval/interval.hpp
+   ../include/libfive/eval/tape.hpp
+   ../include/libfive/render/brep/brep.hpp
+   ../include/libfive/render/brep/contours.hpp
+   ../include/libfive/render/brep/dual.hpp
+   ../include/libfive/render/brep/eval_xtree.hpp
+   ../include/libfive/render/brep/marching.hpp
+   ../include/libfive/render/brep/mesh.hpp
+   ../include/libfive/render/brep/region.hpp
+   ../include/libfive/render/brep/xtree.hpp
+   ../include/libfive/render/discrete/eval_height.hpp
+   ../include/libfive/render/discrete/heightmap.hpp
+   ../include/libfive/render/discrete/voxels.hpp
+   ../include/libfive/solve/bounds.hpp
+   ../include/libfive/solve/solver.hpp
+   ../include/libfive/tree/cache.hpp
+   ../include/libfive/tree/opcode.hpp
+   ../include/libfive/tree/template.hpp
+   ../include/libfive/tree/tree.hpp
+   ../include/libfive.h
 
-add_library(five ${LINK_TYPE}
     eval/base.cpp
+    eval/eval_array.cpp
+    eval/eval_deriv.cpp
+    eval/eval_deriv_array.cpp
+    eval/eval_feature.cpp
     eval/eval_interval.cpp
     eval/eval_jacobian.cpp
-    eval/eval_array.cpp
-    eval/eval_deriv_array.cpp
-    eval/eval_deriv.cpp
-    eval/eval_feature.cpp
     eval/eval_point.cpp
-    eval/tape.cpp
     eval/feature.cpp
+    eval/tape.cpp
+    render/brep/contours.cpp
+    render/brep/marching.cpp
+    render/brep/mesh.cpp
+    render/brep/xtree.cpp
     render/discrete/heightmap.cpp
     render/discrete/voxels.cpp
-    render/brep/xtree.cpp
-    render/brep/contours.cpp
-    render/brep/mesh.cpp
-    render/brep/marching.cpp
     solve/bounds.cpp
     solve/solver.cpp
     tree/cache.cpp
@@ -37,24 +58,17 @@ add_library(five ${LINK_TYPE}
     tree/template.cpp
     tree/tree.cpp
     libfive.cpp
-
-    ${CMAKE_CURRENT_BINARY_DIR}/version.c
 )
 
+target_link_libraries(ao-kernel PUBLIC boost eigen3 pngstatic ntglm)
 
-target_include_directories(five SYSTEM PUBLIC
-    ${Boost_INCLUDE_DIRS}
-    ${PNG_INCLUDE_DIR}
-    ${EIGEN_INCLUDE_DIRS}
-)
-target_include_directories(five PUBLIC
+target_include_directories(ao-kernel PUBLIC
     ../include
 )
 
-set(LIBS ${PNG_LIBRARIES})
+target_compile_definitions(ao-kernel PUBLIC
+    _USE_MATH_DEFINES
+)
 
-if(UNIX AND NOT(APPLE))
-    set(LIBS ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
-endif(UNIX AND NOT(APPLE))
-
-target_link_libraries(five ${LIBS})
+target_compile_features(ao-kernel PUBLIC cxx_std_17)
+target_compile_definitions(ao-kernel PUBLIC "_HAS_AUTO_PTR_ETC")

@@ -1,3 +1,5 @@
+#Ao
+
 add_subdirectory(src)
-add_subdirectory(test)
-add_subdirectory(bind)
+#add_subdirectory(test)
+#add_subdirectory(bind)
