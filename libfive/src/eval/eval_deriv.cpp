@@ -41,6 +41,11 @@ DerivEvaluator::DerivEvaluator(
 
 Eigen::Vector4f DerivEvaluator::deriv(const Eigen::Vector3f& pt)
 {
+    //Load gradients of primitives; only use the first gradient of each here 
+    //(following precendent for min and max evaluation). 
+    for (auto prim : tape->primitives) {
+        d.col(prim.first) = *(prim.second->getGradients(pt).begin());
+    }
     // Perform value evaluation, saving results
     auto w = eval(pt);
     auto xyz = d.col(tape->rwalk(*this));
@@ -147,12 +152,17 @@ void DerivEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             od = ad;
             break;
 
+        case Opcode::USEINTERVAL:
+            od = ad;
+            break;
+
         case Opcode::INVALID:
         case Opcode::CONST:
         case Opcode::VAR_X:
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef ov

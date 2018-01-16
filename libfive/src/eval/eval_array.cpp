@@ -129,9 +129,18 @@ ArrayEvaluator::getAmbiguous(size_t i)
 
     bool abort = false;
     tape->walk(
-        [&](Opcode::Opcode op, Clause::Id /* id */, Clause::Id a, Clause::Id b)
+        [&](Opcode::Opcode op, Clause::Id id, Clause::Id a, Clause::Id b)
         {
-            if (op == Opcode::MIN || op == Opcode::MAX)
+            if (op == Opcode::PRIMITIVE)
+            {
+                auto prim = tape->primitives[id];
+                for (size_t j = 0; j < i; ++j)
+                {
+                    if (!ambig(j) && prim->getGradients(points(j)).size() > 1)
+                    ambig(j) = true;
+                }
+            }
+            else if (op == Opcode::MIN || op == Opcode::MAX)
             {
                 ambig.head(i) = ambig.head(i) ||
                     (f.block(a, 0, 1, i) ==
@@ -249,12 +258,17 @@ void ArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             out = a;
             break;
 
+        case Opcode::USEINTERVAL:
+            out = a;
+            break;
+
         case Opcode::INVALID:
         case Opcode::CONST:
         case Opcode::VAR_X:
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef out

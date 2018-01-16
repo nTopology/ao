@@ -41,6 +41,18 @@ Tree::Tree(float v)
     // Nothing to do here
 }
 
+
+Tree::Tree(const Primitive& prim)
+  : ptr(Cache::instance()->primitive(prim))
+{
+  //Nothing to do here either.
+}
+
+
+Tree Tree::XPrim() { return Tree((Cache::XPrimRef())); }
+Tree Tree::YPrim() { return Tree((Cache::YPrimRef())); }
+Tree Tree::ZPrim() { return Tree((Cache::ZPrimRef())); }
+
 Tree::Tree(Opcode::Opcode op, Tree a, Tree b)
     : ptr(Cache::instance()->operation(op, a.ptr, b.ptr))
 {
@@ -73,6 +85,10 @@ Tree::Tree_::~Tree_()
     if (op == Opcode::CONST)
     {
         Cache::instance()->del(value);
+    }
+    else if (op == Opcode::PRIMITIVE)
+    {
+        Cache::instance()->del(*prim);
     }
     else if (op != Opcode::VAR)
     {

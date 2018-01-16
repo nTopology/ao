@@ -39,6 +39,13 @@ public:
         bool operator<(const Choice& other) { return id < other.id; }
     };
 
+
+    struct PrimitiveChoice
+    {
+        const Clause::Id id;
+        const Eigen::Vector3f choice;
+    };
+
     /*
      *  Checks to see whether a particular epsilon is compatible with
      *  all of the other epsilons in the system.
@@ -52,11 +59,13 @@ public:
      *  Otherwise, pushes to the front of the choice list and returns true
      */
     bool push(const Eigen::Vector3d& e, Choice c={0, 0});
+    bool push(const Eigen::Vector3d& e, PrimitiveChoice c);
 
     /*
      *  Accessor method for the choice list
      */
     const std::set<Choice>& getChoices() const { return choices; }
+    const std::set<PrimitiveChoice>& getPrimitiveChoices() const { return primitiveChoices; }
 
     /*
      *  Top-level derivative (set manually)
@@ -91,12 +100,16 @@ protected:
      */
     bool isCompatibleNorm(const Eigen::Vector3d& e) const;
     bool pushNorm(const Eigen::Vector3d& e, Choice choice);
+    bool pushNorm(Eigen::Vector3d e, PrimitiveChoice choice);
 
     typedef enum { NOT_PLANAR, PLANAR_FAIL, PLANAR_SUCCESS } PlanarResult;
     PlanarResult checkPlanar(const Eigen::Vector3d& v) const;
 
     /*  Per-clause decisions  */
     std::set<Choice> choices;
+
+    /*  Per-primitive decisions  */
+    std::set<PrimitiveChoice> primitiveChoices;
 
     /*  Deduplicated list of epsilons  */
     std::list<Eigen::Vector3d> epsilons;
@@ -107,5 +120,6 @@ protected:
 
 /*  Defining operator< lets us store Choices in std::set, etc */
 bool operator<(const Feature::Choice& a, const Feature::Choice& b);
+bool operator<(const Feature::PrimitiveChoice& a, const Feature::PrimitiveChoice& b);
 
 }   // namespace Kernel

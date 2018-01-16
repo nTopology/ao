@@ -238,8 +238,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             // Pack corners into filled / empty arrays
             for (uint8_t i=0; i < children.size(); ++i)
             {
-                all_full  &=  corners[i];
-                all_empty &= !corners[i];
+                all_full  &= (corners[i] != Interval::EMPTY);
+                all_empty &= (corners[i] != Interval::FILLED);
             }
         }
         type = all_empty ? Interval::EMPTY
@@ -499,7 +499,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                         // derivatives value at this particular point
                         eval->feature.push(f);
 
-                        const auto ds = eval->feature.deriv(pos);
+                        const auto ds = eval->feature.deriv(pos, f);
 
                         // Unpack 3D derivatives into XTree-specific
                         // dimensionality, and find normal.

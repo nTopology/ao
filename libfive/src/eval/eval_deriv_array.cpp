@@ -28,7 +28,7 @@ DerivArrayEvaluator::DerivArrayEvaluator(std::shared_ptr<Tape> t)
 
 DerivArrayEvaluator::DerivArrayEvaluator(
         std::shared_ptr<Tape> t, const std::map<Tree::Id, float>& vars)
-    : ArrayEvaluator(t, vars), d(tape->num_clauses + 1, 1)
+    : ArrayEvaluator(t, vars), d(tape->num_clauses + 1, 1), allPrimitiveGradients(tape->num_clauses + 1, N)
 {
     // Initialize all derivatives to zero
     for (unsigned i=0; i < d.rows(); ++i)
@@ -46,6 +46,36 @@ Eigen::Vector4f DerivArrayEvaluator::deriv(const Eigen::Vector3f& pt)
 {
     set(pt, 0);
     return derivs(1).col(0);
+}
+
+Eigen::Block<decltype(ArrayEvaluator::ambig), 1, Eigen::Dynamic>
+DerivArrayEvaluator::getAmbiguous(size_t i)
+{
+  // Reset the ambiguous array to all false
+  ambig = false;
+
+  bool abort = false;
+  tape->walk(
+    [&](Opcode::Opcode op, Clause::Id id, Clause::Id a, Clause::Id b)
+  {
+    if (op == Opcode::PRIMITIVE)
+    {
+      auto prim = tape->primitives[id];
+      for (size_t j = 0; j < i; ++j)
+      {
+        if (!ambig(j) && allPrimitiveGradients(id, j).size() > 1)
+          ambig(j) = true;
+      }
+    }
+    else if (op == Opcode::MIN || op == Opcode::MAX)
+    {
+      ambig.head(i) = ambig.head(i) ||
+        (f.block(a, 0, 1, i) ==
+          f.block(b, 0, 1, i));
+    }
+  }, abort);
+
+  return ambig.head(i);
 }
 
 Eigen::Block<decltype(DerivArrayEvaluator::out), 4, Eigen::Dynamic>
@@ -79,7 +109,11 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             break;
         case Opcode::MUL:
             // Product rule
-            od = bd.rowwise()*av + ad.rowwise()*bv;
+
+          for (auto i = 0; i < count; ++i) {
+            d(id).col(i) = d(a).col(i) * f(b, i) + d(b).col(i) * f(a, i);
+          }
+            //od = bd.rowwise()*av + ad.rowwise()*bv;
             break;
         case Opcode::MIN:
             for (unsigned i=0; i < od.rows(); ++i)
@@ -94,7 +128,7 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             break;
         case Opcode::DIV:
           for (auto i = 0; i < count; ++i) {
-            d(id).col(i) = d(a).col(i) * f(b, i) - d(b).col(i) * f(a, i) / (f(b, i) * f(b, i));
+            d(id).col(i) = (d(a).col(i) * f(b, i) - d(b).col(i) * f(a, i)) / (f(b, i) * f(b, i));
           }
           /*od = (ad.rowwise()*bv - bd.rowwise()*av).rowwise() /
           bv.pow(2);*/
@@ -137,10 +171,16 @@ void DerivArrayEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             od = -ad;
             break;
         case Opcode::SIN:
-            od = ad.rowwise() * cos(av);
+          for (auto i = 0; i < count; ++i) {
+            d(id).col(i) = d(a).col(i) * cos(f(a, i));
+          }
+            //od = ad.rowwise() * cos(av);
             break;
         case Opcode::COS:
-            od = ad.rowwise() * -sin(av);
+          for (auto i = 0; i < count; ++i) {
+            d(id).col(i) = d(a).col(i) * -sin(f(a, i));
+          }
+            //od = ad.rowwise() * -sin(av);
             break;
         case Opcode::TAN:
             od = ad.rowwise() * pow(1/cos(av), 2);

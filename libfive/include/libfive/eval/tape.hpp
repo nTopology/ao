@@ -71,7 +71,9 @@ public:
      *  Tree::var().id() */
     boost::bimap<Clause::Id, Tree::Id> vars;
 
-    /*  Returns the total number of clauses (including X/Y/Z, variables, and
+    std::map<Clause::Id, const Primitive*> primitives;
+
+    /*  Returns the total number of clauses (including X/Y/Z, primitives, variables, and
      *  constants, which aren't explicitly in the tape )  */
     size_t num_clauses;
 

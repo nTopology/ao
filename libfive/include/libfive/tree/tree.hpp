@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <map>
 
 #include "libfive/tree/opcode.hpp"
+#include "libfive/eval/primitive.h"
 
 namespace Kernel {
 
@@ -43,11 +44,21 @@ public:
     Tree(float v);
 
     /*
+    *  Returns a Tree for the given primitive
+    */
+    Tree(const Primitive& prim);
+
+    /*
      *  Constructors for individual axes
      */
     static Tree X() { return Tree(Opcode::VAR_X); }
     static Tree Y() { return Tree(Opcode::VAR_Y); }
     static Tree Z() { return Tree(Opcode::VAR_Z); }
+
+
+    static Tree XPrim();
+    static Tree YPrim();
+    static Tree ZPrim();
 
     /*
      *  Used to mark a bad parse, among other things
@@ -74,7 +85,7 @@ public:
     /*  Bitfield enum for node flags */
     enum Flags {
         /*  Does this Id only contain constants and variables
-         *  (no VAR_X, VAR_Y, or VAR_Z opcodes allowed) */
+         *  (no VAR_X, VAR_Y, VAR_Z, or PRIMITIVE opcodes allowed) */
         FLAG_LOCATION_AGNOSTIC  = (1<<1),
     };
 
@@ -91,6 +102,10 @@ public:
 
         /*  Only populated for constants  */
         const float value;
+
+
+        /* Only populated for primitives */
+        const Primitive* prim;
 
         /*  Only populated for operations  */
         const std::shared_ptr<Tree_> lhs;

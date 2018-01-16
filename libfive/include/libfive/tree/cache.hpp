@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <mutex>
 
 #include "libfive/tree/tree.hpp"
+#include "libfive/eval/primitive.h"
 
 namespace Kernel {
 
@@ -58,13 +59,26 @@ public:
     Node Y() { return operation(Opcode::VAR_Y); }
     Node Z() { return operation(Opcode::VAR_Z); }
 
+    Node XPrim() { return primitive(_XPos); }
+    Node YPrim() { return primitive(_YPos); }
+    Node ZPrim() { return primitive(_ZPos); }
+
+
+    static const XPos& XPrimRef() { return _XPos; }
+    static const YPos& YPrimRef() { return _YPos; }
+    static const ZPos& ZPrimRef() { return _ZPos; }
+
+    std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> getPrimitives() { return primitives; }
+
     Node var();
+    Node primitive(const Primitive& prim);
 
     /*
      *  Called when the last Tree_ is destroyed
      */
     void del(float v);
     void del(Opcode::Opcode op, Node lhs=nullptr, Node rhs=nullptr);
+    void del(const Primitive& prim);
 
 protected:
     /*
@@ -97,8 +111,14 @@ protected:
     /*  Constants in the tree are uniquely identified by their value  */
     std::map<float, std::weak_ptr<Tree::Tree_>> constants;
 
+    /* And primitives by the pointer to them */
+    std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> primitives;
+
     static std::recursive_mutex mut;
     static Cache _instance;
+    static XPos _XPos;
+    static YPos _YPos;
+    static ZPos _ZPos;
 };
 
 }   // namespace Kernel

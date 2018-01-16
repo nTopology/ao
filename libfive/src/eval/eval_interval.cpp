@@ -52,7 +52,10 @@ Interval::I IntervalEvaluator::eval(const Eigen::Vector3f& lower,
     i[tape->X] = {lower.x(), upper.x()};
     i[tape->Y] = {lower.y(), upper.y()};
     i[tape->Z] = {lower.z(), upper.z()};
-
+    Region<3> region(lower.template cast<double>(), upper.template cast<double>());
+    for (auto prim : tape->primitives) {
+        i[prim.first] = prim.second->getRange(region);
+    }
     return i[tape->rwalk(*this)];
 }
 
@@ -215,12 +218,17 @@ void IntervalEvaluator::operator()(Opcode::Opcode op, Clause::Id id,
             out = a;
             break;
 
+        case Opcode::USEINTERVAL:
+          out = b;
+          break;
+
         case Opcode::INVALID:
         case Opcode::CONST:
         case Opcode::VAR_X:
         case Opcode::VAR_Y:
         case Opcode::VAR_Z:
         case Opcode::VAR:
+        case Opcode::PRIMITIVE:
         case Opcode::LAST_OP: assert(false);
     }
 #undef out

@@ -5,16 +5,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # float -> int
 add_library(ao-kernel STATIC
    ../include/libfive/eval/base.hpp
    ../include/libfive/eval/clause.hpp
-   ../include/libfive/eval/eval_affine.hpp
    ../include/libfive/eval/eval_array.hpp
    ../include/libfive/eval/eval_deriv.hpp
    ../include/libfive/eval/eval_deriv_array.hpp
    ../include/libfive/eval/eval_feature.hpp
    ../include/libfive/eval/eval_interval.hpp
-   ../include/libfive/eval/eval_jacobian.hpp
    ../include/libfive/eval/eval_point.hpp
    ../include/libfive/eval/feature.hpp
    ../include/libfive/eval/interval.hpp
+   ../include/libfive/eval/primitive.h
    ../include/libfive/eval/tape.hpp
    ../include/libfive/render/brep/brep.hpp
    ../include/libfive/render/brep/contours.hpp
@@ -41,7 +40,6 @@ add_library(ao-kernel STATIC
     eval/eval_deriv_array.cpp
     eval/eval_feature.cpp
     eval/eval_interval.cpp
-    eval/eval_jacobian.cpp
     eval/eval_point.cpp
     eval/feature.cpp
     eval/tape.cpp
