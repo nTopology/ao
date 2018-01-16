@@ -60,6 +60,12 @@ Tape::Tape(const Tree root)
         {
             vars.left.insert({id, m.id()});
         }
+        // For primitives, record their pointers so that
+        // they can be used when calculating a point.
+        else if (m->op == Opcode::PRIMITIVE) {
+          assert(m->prim); //Should not be a null pointer.
+          primitives[id] = m->prim;
+        }
         else
         {
             assert(m->op == Opcode::VAR_X ||

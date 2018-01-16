@@ -123,11 +123,11 @@ bool libfive_tree_eq(libfive_tree a, libfive_tree b);
 
 void libfive_tree_delete(libfive_tree ptr);
 
-bool libfive_tree_save(libfive_tree ptr, const char* filename);
-libfive_tree libfive_tree_load(const char* filename);
+bool libfive_tree_save(libfive_tree ptr, const char* filename); //does not work with primitives.
+libfive_tree libfive_tree_load(const char* filename); //does not work with primitives.
 
 libfive_tree libfive_tree_remap(libfive_tree p,
-        libfive_tree x, libfive_tree y, libfive_tree z);
+        libfive_tree x, libfive_tree y, libfive_tree z); //does not work with primitives.
 
 libfive_region3 libfive_tree_bounds(libfive_tree p);
 

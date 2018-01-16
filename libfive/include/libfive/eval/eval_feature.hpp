@@ -57,6 +57,20 @@ public:
      *  Checks for features at the given position
      */
     std::list<Feature> featuresAt(const Eigen::Vector3f& p);
+
+    //Non-virtual override that writes to dPrimAll as well.
+    Eigen::Vector4f deriv(const Eigen::Vector3f& pt);
+
+    //Uses gradients for primitives from a feature, where they exist, rather than just taking the first one.
+    //Does not recalculate non-ambiguous primitives; the one-argument version of deriv needs to be called first
+    //to populate those values.  If feature has no non-ambiguous primitives, functions as the one-argument version
+    //rather than as a no-op.
+    Eigen::Vector4f deriv(const Eigen::Vector3f& pt, const Feature& feature);
+
+
+protected:
+    /*Stores all derivatives of primitives, rather than just the first.*/
+    Eigen::Array<std::vector<Eigen::Vector3f>, 1, Eigen::Dynamic> dPrimAll;
 };
 
 }   // namespace Kernel
