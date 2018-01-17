@@ -8,6 +8,7 @@
 
 namespace Kernel {
 
+    
 template <Axis::Axis A, bool D>
 void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
 {
