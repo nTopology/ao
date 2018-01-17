@@ -80,6 +80,34 @@ protected:
      *  (used for debugging)
      */
     void line(const Eigen::Vector3f& a, const Eigen::Vector3f& b);
+
+    void addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D);
+    //The third vertex is generally the one that is "too close" to the original edge.
+
+    void removeTriangle(uint32_t target);
+
+    void processNegativeTriangles();
+
+private:
+    struct negativeTriangle {
+        Eigen::Matrix<uint32_t, 3, 1> vertices;
+        //In the same orientation as if it were added as a normal triangle, but the vertex that is misplaced 
+        //compared to the line between the other two (extended by the axis) is always last.
+        Axis::Axis A;
+        bool D;
+    };
+
+    std::vector<negativeTriangle> negativeTriangles;
+    std::unordered_map<std::array<uint32_t, 2>, uint32_t, boost::hash<std::array<uint32_t, 2>>> edgesToBranes;
+
+    //For faster processing of negative triangles.
+
+    void testEdgesToBranes() {//for debugging
+        for (auto iter = branes.begin(); iter != branes.end(); ++iter) {
+            if (edgesToBranes.find({ (*iter)(0), (*iter)(1) }) == edgesToBranes.end())
+                abort();
+        }
+    }
 };
 
 }   // namespace Kernel
