@@ -183,6 +183,8 @@ std::string Opcode::toOpString(Opcode op) //Currently just expresses all primiti
         case CONST:
         case LAST_OP: return "";
     }
+    assert(0);
+    return "";
 }
 
 bool Opcode::isCommutative(Opcode op)
@@ -227,7 +229,8 @@ bool Opcode::isCommutative(Opcode op)
         case MAX:
             return true;
     }
-
+    assert(0);
+    return false;
 }
 
 }   // namespace Kernel

@@ -65,6 +65,8 @@ public:
             case 1: return upper;
             default: assert(false);
         }
+        assert(false);
+        return lower;
     }
 
     /*
