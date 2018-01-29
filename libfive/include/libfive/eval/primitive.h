@@ -48,10 +48,10 @@ public:
 class XPos : public Primitive {
 public:
   Interval::I getRange(Region<2> region) const override {
-    return { region.lower.x(), region.upper.x() };
+    return { float(region.lower.x()), float(region.upper.x()) };
   }
   Interval::I getRange(Region<3> region) const override {
-    return { region.lower.x(), region.upper.x() };
+    return { float(region.lower.x()), float(region.upper.x()) };
   }
   std::vector<Eigen::Vector3f> getGradients(Eigen::Vector3f point) const override {
     return std::vector<Eigen::Vector3f>{Eigen::Vector3f(1.f, 0.f, 0.f)};
@@ -67,10 +67,10 @@ public:
 class YPos : public Primitive {
 public:
   Interval::I getRange(Region<2> region) const override {
-    return { region.lower.y(), region.upper.y() };
+    return { float(region.lower.y()), float(region.upper.y()) };
   }
   Interval::I getRange(Region<3> region) const override {
-    return { region.lower.y(), region.upper.y() };
+    return { float(region.lower.y()), float(region.upper.y()) };
   }
   std::vector<Eigen::Vector3f> getGradients(Eigen::Vector3f point) const override {
     return std::vector<Eigen::Vector3f>{Eigen::Vector3f(0.f, 1.f, 0.f)};
@@ -86,10 +86,10 @@ public:
 class ZPos : public Primitive {
 public:
   Interval::I getRange(Region<2> region) const override {
-    return { region.perp(0), region.perp(0) }; //A one-point interval.
+    return { float(region.perp(0)), float(region.perp(0)) }; //A one-point interval.
   }
   Interval::I getRange(Region<3> region) const override {
-    return { region.lower.z(), region.upper.z() };
+    return { float(region.lower.z()), float(region.upper.z()) };
   }
   std::vector<Eigen::Vector3f> getGradients(Eigen::Vector3f point) const override {
     return std::vector<Eigen::Vector3f>{Eigen::Vector3f(0.f, 0.f, 1.f)};
