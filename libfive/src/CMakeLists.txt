@@ -15,6 +15,7 @@ add_library(ao-kernel STATIC
    ../include/libfive/eval/interval.hpp
    ../include/libfive/eval/primitive.h
    ../include/libfive/eval/tape.hpp
+   ../include/libfive/eval/transformed_primitive.h
    ../include/libfive/render/brep/brep.hpp
    ../include/libfive/render/brep/contours.hpp
    ../include/libfive/render/brep/dual.hpp
@@ -43,6 +44,7 @@ add_library(ao-kernel STATIC
     eval/eval_point.cpp
     eval/feature.cpp
     eval/tape.cpp
+    eval/transformed_primitive.cpp
     render/brep/contours.cpp
     render/brep/marching.cpp
     render/brep/mesh.cpp

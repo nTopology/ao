@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "libfive/tree/cache.hpp"
 #include "libfive/tree/template.hpp"
+#include "libfive/eval/transformed_primitive.h"
 
 namespace Kernel {
 
@@ -158,6 +159,12 @@ Tree Tree::remap(Tree X_, Tree Y_, Tree Z_) const
 {
     std::map<Tree::Id, std::shared_ptr<Tree_>> m = {
         {X().id(), X_.ptr}, {Y().id(), Y_.ptr}, {Z().id(), Z_.ptr}};
+    auto primitives = Cache::instance()->getPrimitives();
+    for (auto iter = primitives.begin(); iter != primitives.end(); ++iter) {
+      m[iter->second.lock().get()] = Tree(TransformedPrimitive(*(iter->first), X_, Y_, Z_)).ptr;
+      //If multiple transformations are used in succession, a potential speedup may be to combine them so that
+      //there is never a transformed primitive whose underlying is another transformed primitive.
+    }
 
     return remap(m);
 }
