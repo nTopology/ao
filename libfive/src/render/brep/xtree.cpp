@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <Eigen/StdVector>
 
 #include "libfive/render/brep/xtree.hpp"
-#include "libfive/render/axes.hpp"
 
 namespace Kernel {
 
@@ -46,7 +45,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
 {
     std::atomic_bool cancel(false);
     const std::map<Tree::Id, float> vars;
-    return build(t, vars, region, min_feature, max_err, multithread, cancel);
+    return build(t, vars, region, min_feature, max_err, /*multithread*/false, cancel);
 }
 
 template <unsigned N>
@@ -86,7 +85,11 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
         mt = Marching::buildTable<N>();
     }
 
-    auto out = new XTree(es, region, min_feature, max_err, multithread, cancel);
+    TreesToSplit splitterHolder;
+    auto out = new XTree(es, region, min_feature, max_err, multithread, cancel, 
+        nullptr, -1, splitterHolder, 0);
+    
+    splitterHolder.process(es, max_err, cancel);
 
     // Return an empty XTree when cancelled
     // (to avoid potentially ambiguous or mal-constructed trees situations)
@@ -104,8 +107,11 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
 template <unsigned N>
 XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 double min_feature, double max_err, bool multithread,
-                std::atomic_bool& cancel)
-    : region(region), _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero()),
+                std::atomic_bool& cancel, XTree<N>* parent, 
+                uint8_t childNumberOfParent, TreesToSplit& splittersHolder,
+                int depth)
+    : region(region), parent(parent), childNumberOfParent(childNumberOfParent), 
+      _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero()), depth(depth),
       AtA(Eigen::Matrix<double, N, N>::Zero()),
       AtB(Eigen::Matrix<double, N, 1>::Zero())
 {
@@ -118,14 +124,14 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     std::fill(index.begin(), index.end(), 0);
 
     // Do a preliminary evaluation to prune the tree
-    auto i = eval->interval.evalAndPush(region.lower3().template cast<float>(),
+    auto interval = eval->interval.evalAndPush(region.lower3().template cast<float>(),
                                         region.upper3().template cast<float>());
 
-    if (Interval::isFilled(i))
+    if (Interval::isFilled(interval))
     {
         type = Interval::FILLED;
     }
-    else if (Interval::isEmpty(i))
+    else if (Interval::isEmpty(interval))
     {
         type = Interval::EMPTY;
     }
@@ -150,10 +156,10 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 for (unsigned i=0; i < children.size(); ++i)
                 {
                     futures[i] = std::async(std::launch::async,
-                        [&eval, &rs, i, min_feature, max_err, &cancel]()
+                        [&eval, &rs, i, min_feature, max_err, &cancel, this, &splittersHolder, depth]()
                         { return new XTree(
                                 eval + i, rs[i], min_feature, max_err,
-                                false, cancel); });
+                                false, cancel, this, i, splittersHolder, depth + 1); });
                 }
                 for (unsigned i=0; i < children.size(); ++i)
                 {
@@ -168,7 +174,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                     // Populate child recursively
                     children[i].reset(new XTree<N>(
                                 eval, rs[i], min_feature, max_err,
-                                false, cancel));
+                                false, cancel, this, i, splittersHolder, depth + 1));
                 }
             }
 
@@ -252,8 +258,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     {
         std::fill(corners.begin(), corners.end(), type);
         std::for_each(children.begin(), children.end(),
-            [](std::unique_ptr<const XTree<N>>& o) { o.reset(); });
-        manifold = true;
+            [](std::unique_ptr<XTree<N>>& o) { o.reset(); });
+        combinable = true;
     }
 
     // Build and store the corner mask
@@ -267,32 +273,32 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     {
         // Store this tree's depth as a function of its children
         level = std::accumulate(children.begin(), children.end(), (unsigned)0,
-            [](const unsigned& a, const std::unique_ptr<const XTree<N>>& b)
+            [](const unsigned& a, const std::unique_ptr<XTree<N>>& b)
             { return std::max(a, b->level);} ) + 1;
 
         // If all children are non-branches, then we could collapse
         if (std::all_of(children.begin(), children.end(),
-                        [](const std::unique_ptr<const XTree<N>>& o)
+                        [](const std::unique_ptr<XTree<N>>& o)
                         { return !o->isBranch(); }))
         {
             //  This conditional implements the three checks described in
             //  [Ju et al, 2002] in the section titled
             //      "Simplification with topology safety"
-            manifold = cornersAreManifold() &&
+            combinable = cornersAreManifold() &&
                 std::all_of(children.begin(), children.end(),
-                        [](const std::unique_ptr<const XTree<N>>& o)
-                        { return o->manifold; }) &&
+                        [](const std::unique_ptr<XTree<N>>& o)
+                        { return o->combinable; }) &&
                 leafsAreManifold();
 
             // Attempt to collapse this tree by positioning the vertex
             // in the summed QEF and checking to see if the error is small
-            if (manifold)
+            if (combinable)
             {
                 // Populate the feature rank as the maximum of all children
                 // feature ranks (as seen in DC: The Secret Sauce)
                 rank = std::accumulate(
                         children.begin(), children.end(), (unsigned)0,
-                        [](unsigned a, const std::unique_ptr<const XTree<N>>& b)
+                        [](unsigned a, const std::unique_ptr<XTree<N>>& b)
                             { return std::max(a, b->rank);} );
 
                 // Accumulate the mass point and QEF matrices
@@ -313,10 +319,10 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 // a leaf by erasing all of the child branches
                 if (findVertex(vertex_count++) < max_err &&
                     fabs(eval->feature.baseEval(vert3().template cast<float>()))
-                        < max_err)
+                        < max_err && region.contains(vert(vertex_count - 1)))
                 {
                     std::for_each(children.begin(), children.end(),
-                        [](std::unique_ptr<const XTree<N>>& o) { o.reset(); });
+                        [](std::unique_ptr<XTree<N>>& o) { o.reset(); });
                 }
                 else
                 {
@@ -328,7 +334,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
     else if (type == Interval::AMBIGUOUS)
     {
         // Figure out if the leaf is manifold
-        manifold = cornersAreManifold();
+        combinable = cornersAreManifold();
 
         // Here, we'll prepare to store position, {normal, value} pairs
         // for every crossing and feature
@@ -608,9 +614,58 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             // of the vertex array and ignoring the error result (because
             // this is the bottom of the recursion)
             findVertex(vertex_count++);
+            auto insideVert = vert(vertex_count - 1);
+            auto vertOutside = false;
+            auto forceMove = false; //Set to true if leaving the vertex outside will result in crossing over an active face,
+                                    //and it needs to be moved if not splitting.
+            for (auto i = 0; i < N; ++i) { //This can probably be improved by minimizing the QEF along the appropriate face or edge.
+              if (insideVert(i) < region.lower(i)) {
+                insideVert(i) = region.lower(i);
+                vertOutside = true;
+                auto faceCornerStatus = Interval::AMBIGUOUS;
+                for (auto q = 0; q < 2; ++q)
+                    for (auto r = 0; r < 2; ++r) {
+                        uint8_t corner = q * Axis::Q(Axis::toAxis(i)) | r * Axis::R(Axis::toAxis(i));
+                        if (faceCornerStatus == Interval::AMBIGUOUS)
+                            faceCornerStatus = cornerState(corner);
+                        else if (faceCornerStatus != cornerState(corner))
+                            forceMove = true;
+                  }
+              }
+              else if (insideVert(i) > region.upper(i)) {
+                insideVert(i) = region.upper(i);
+                vertOutside = true;
+                auto faceCornerStatus = Interval::AMBIGUOUS;
+                for (auto q = 0; q < 2; ++q)
+                    for (auto r = 0; r < 2; ++r) {
+                        uint8_t corner = Axis::toAxis(i) | q * Axis::Q(Axis::toAxis(i)) | r * Axis::R(Axis::toAxis(i));
+                        if (faceCornerStatus == Interval::AMBIGUOUS)
+                            faceCornerStatus = cornerState(corner);
+                        else if (faceCornerStatus != cornerState(corner))
+                            forceMove = true;
+                  }
+              }
+            }
+            if (vertOutside) {
+                if ((insideVert.transpose() * AtA * insideVert - 2 * insideVert.transpose() * AtB)[0] -
+                (vert(vertex_count - 1).transpose() * AtA * vert(vertex_count - 1) - 2 * vert(vertex_count - 1).transpose() * AtB)[0]
+                < max_err) {
+                    if (forceMove)
+                        verts.col(vertex_count - 1) = insideVert;
+                }
+                else {
+                    splittersHolder.mMutex.lock();
+                    splittersHolder.candidateTrees.push_back(this);
+                    splittersHolder.mMutex.unlock();
+                    //And now we need to return immediately; this node is ill-formed and needs to be split later,
+                    //and we don't want to double-push this if there are two bad vertices.
+                    eval->interval.pop();
+                    combinable = false;
+                    return;
+                }
+            }
         }
     }
-
     // ...and we're done.
     eval->interval.pop();
 }
@@ -657,6 +712,92 @@ double XTree<N>::findVertex(unsigned index)
     // Return the QEF error
     return (v.transpose() * AtA * v - 2*v.transpose() * AtB)[0] + BtB;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <unsigned N>
+XTree<N>* XTree<N>::neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder, 
+  Axis::Axis A, bool D) const {
+  if (parent) {
+    if (((childNumberOfParent & A) != 0) != D) {
+      return &(parent->forceChild(eval, max_err, cancel, splittersHolder, childNumberOfParent ^ A));
+    }
+    else {
+      auto parentNeighbor = parent->neighbor(eval, max_err, cancel, splittersHolder, A, D);
+      if (parentNeighbor) {
+        return &(parentNeighbor->forceChild(eval, max_err, cancel, splittersHolder, childNumberOfParent ^ A));
+      }
+      else return nullptr;
+    }
+  }
+  else return nullptr;
+}
+
+template <unsigned N>
+void XTree<N>::split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder) {
+    if (!isBranch()) { //Otherwise this is a no-op.
+        vertex_count = 0;
+        std::fill(index.begin(), index.end(), 0);
+        //Now, we split it, just like when first building the Xtree.
+        auto rs = region.subdivide();
+        for (uint8_t i = 0; i < children.size(); ++i)
+        {
+            // Populate child recursively
+            children[i].reset(new XTree<N>(
+                eval, rs[i], INFINITY, max_err,
+                false, cancel, this, i, splittersHolder, depth + 1));
+        }
+        if (cancel.load())
+        {
+            eval->interval.pop();
+            return;
+        }
+        bool all_empty = true;
+        bool all_full = true;
+        for (uint8_t i = 0; i < children.size(); ++i)
+        {
+            corners[i] = children[i]->corners[i];
+            all_empty &= children[i]->type == Interval::EMPTY;
+            all_full &= children[i]->type == Interval::FILLED;
+        }
+        type = all_empty ? Interval::EMPTY
+            : all_full ? Interval::FILLED : Interval::AMBIGUOUS;
+        //Adjust its level and that of its ancestors.
+        level = std::accumulate(children.begin(), children.end(), (unsigned)0,
+            [](const unsigned& a, const std::unique_ptr<XTree<N>>& b)
+        { return std::max(a, b->level); }) + 1;
+        unsigned int newLevel = level + 1;
+        for (XTree<N>* targetTree = parent; targetTree; targetTree = targetTree->parent, ++newLevel) {
+            if (newLevel > targetTree->level)
+                targetTree->level = newLevel;
+            else break;
+        }
+        //Now we have to check for anything that could change the topology, and therefore requires a neighbor to split as well.
+        for (auto axisNo = 0; axisNo < 3; ++axisNo) {
+            auto axis = Axis::toAxis(axisNo);
+            for (auto dir = 0; dir < 2; ++dir) {
+                if (!faceSplitWasTopologicallySafe(axis, dir)) {
+                    if (neighbor(eval, max_err, cancel, splittersHolder, axis, dir)) {
+                        neighbor(eval, max_err, cancel, splittersHolder, axis, dir)->split(eval, max_err, cancel, splittersHolder);
+                    }
+                    else {
+                        assert (false);
+                        cancel = true; //The bounding box was not large enough; the resulting mesh will not be topologically closed,
+                                       //and negative triangle processing may fail.  An exception may be warranted.
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <unsigned N>
+XTree<N>& XTree<N>::forceChild(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, 
+    TreesToSplit& splittersHolder, unsigned i) {
+    if (!isBranch()) split(eval, max_err, cancel, splittersHolder);
+    return *children[i];
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -714,6 +855,13 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const
         {{0, Axis::X}, {0, Axis::Y},
          {Axis::X, Axis::X|Axis::Y}, {Axis::Y, Axis::Y|Axis::X}};
     return es;
+}
+
+bool XTree<2>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const {
+  auto corner1 = D ? 3 : 0;
+  auto corner2 = (3 - corner1) ^ A;
+  auto edgeState = child(D ? 3 : 0)->cornerState((D ? 0 : 3) ^ A);
+  return (edgeState == cornerState(corner1) || edgeState == cornerState(corner2));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -868,6 +1016,42 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const
          {Axis::Z|Axis::X, Axis::Z|Axis::X|Axis::Y},
          {Axis::Z|Axis::Y, Axis::Z|Axis::Y|Axis::X}};
     return es;
+}
+
+bool XTree<3>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const {
+  //If the face has no patches (all corners are full or empty), all childrens' corners must match this.
+  //If the face has one patch, each child must have zero or one patches.
+  //If the face has two patches, always return false.  (Otherwise, determining the correct patch on the larger cell is too difficult to be worth it.)
+  //Finally, the edges must be safe (as in Ju's tests).
+  std::array<std::array<Interval::State, 3>, 3> points;
+  for (auto q1 = 0; q1 < 2; ++q1)
+    for (auto q2 = q1; q2 < 2; ++q2)
+      for (auto r1 = 0; r1 < 2; ++r1)
+        for (auto r2 = r1; r2 < 2; ++r2)
+          points[q1 + q2][r1 + r2] = child(q1 * Axis::Q(A) + r1 * Axis::R(A) + D * A)->
+            cornerState(q2 * Axis::Q(A) + r2 * Axis::R(A) + D * A);
+  if (points[0][0] == points[2][2] && points[0][2] == points[2][0]) {
+    if (points[0][0] == points[0][2]) { //All corners are the same; everything else had better match too.
+      for (auto i = 0; i < 3; ++i)
+        for (auto j = 0; j < 3; ++j)
+          if (points[i][j] != points[0][0])
+            return false;
+    }
+    else return false; //The original face had two patches.
+  }
+  else {
+    for (auto i = 0; i < 2; ++i) {
+      for (auto j = 0; j < 2; ++j) {
+        if (points[i * 2][j * 2] == points[1][1] && points[i * 2][1] == points[1][j * 2] && points[i * 2][1] != points[1][1])
+          return false;
+      }
+      if (points[i * 2][0] == points[i * 2][2] && points[i * 2][1] != points[i * 2][0])
+        return false;
+      if (points[0][i * 2] == points[2][i * 2] && points[1][i * 2] != points[0][i * 2])
+        return false;
+    }
+  }
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -383,7 +383,7 @@ void loadCases<3>(VertsToPatches<3>& t)
  *  returning a new vertex (by id)
  */
 template <unsigned N>
-static int rotateVertex(int vert, const Eigen::Matrix<double, N, N>& rot)
+static int rotateVertex(unsigned int vert, const Eigen::Matrix<double, N, N>& rot)
 {
     assert(vert < _verts(N));
 
@@ -498,7 +498,8 @@ std::unique_ptr<MarchingTable<N>> buildTable()
         }
     }
 
-    // Mark every vertex-pair-to-edge and edge-to-patch mapping as invalid
+    // Mark every vertex-pair-to-edge and edge-to-patch mapping as invalid, 
+    // and every face-to-patch mapping as empty.
     for (unsigned i=0; i < table->e.size(); ++i)
     {
         std::fill(table->e[i].begin(), table->e[i].end(), -1);
@@ -506,6 +507,10 @@ std::unique_ptr<MarchingTable<N>> buildTable()
     for (unsigned i=0; i < table->p.size(); ++i)
     {
         std::fill(table->p[i].begin(), table->p[i].end(), -1);
+    }
+    for (unsigned i = 0; i < table->ftp.size(); ++i)
+    {
+      std::fill(table->ftp[i].begin(), table->ftp[i].end(), -1);
     }
 
     // Assign every vertex pair in the table to an edge id
@@ -530,6 +535,21 @@ std::unique_ptr<MarchingTable<N>> buildTable()
 
                 // Store edge-to-patch mapping
                 table->p[i][edge] = p;
+
+                // Store face-to-patch mapping
+                for (auto axisIndex = 0; axisIndex < N; ++axisIndex) {
+                  auto faceIndex = axisIndex;
+                  if (1 << axisIndex & verts.first && 1 << axisIndex & verts.second) {
+                    faceIndex += N;
+                  }
+                  else if (1 << axisIndex & verts.first || 1 << axisIndex & verts.second)
+                    continue;
+                  auto& patchLocation = table->ftp[i][faceIndex];
+                  if (patchLocation == -1)
+                    patchLocation = p;
+                  else if (patchLocation != p) 
+                    patchLocation = -2;
+                }
             }
         }
     }

@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "libfive/render/brep/region.hpp"
 #include "libfive/render/brep/brep.hpp"
 #include "libfive/render/brep/xtree.hpp"
+#include <boost/container/small_vector.hpp>
 
 namespace Kernel {
 
@@ -81,8 +82,9 @@ protected:
      */
     void line(const Eigen::Vector3f& a, const Eigen::Vector3f& b);
 
-    void addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D);
-    //The third vertex is generally the one that is "too close" to the original edge.
+    void addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D, bool force = false);
+    //The third vertex is generally the one that is "too close" to the original edge.  
+    //Force forces it to be a positive triangle.
 
     void removeTriangle(uint32_t target);
 
@@ -98,13 +100,54 @@ private:
     };
 
     std::vector<negativeTriangle> negativeTriangles;
-    std::unordered_map<std::array<uint32_t, 2>, uint32_t, boost::hash<std::array<uint32_t, 2>>> edgesToBranes;
+    //std::unordered_map<std::array<uint32_t, 2>, std::array<int32_t, 2>, boost::hash<std::array<uint32_t, 2>>> edgesToBranes;
+    //Removed because it was getting stuck somewhere in the hash function.
 
-    //For faster processing of negative triangles.
+    std::map<std::array<uint32_t, 2>, boost::container::small_vector<size_t, 1>> edgesToBranes;
+    //For faster processing of negative triangles.  The doubled value is because (dual) marching cubes can sometimes produce non-manifold shapes
+    //that have 4 triangles along a single edge, 2 in each direction.  If only one value is used, it should be value[0], and value[1] should be marked -1.
+    std::vector<std::pair<Axis::Axis, bool>> positiveTriangleExtraInfo; //Is needed to process negative triangles, but can be cleared afterward.
 
     void testEdgesToBranes() {//for debugging
+        auto idx = 0;
+        for (auto iter = branes.begin(); iter != branes.end(); ++iter, ++idx) {
+            for (auto i = 0; i < 3; ++i) {
+                if (edgesToBranes.find({ (*iter)(i), (*iter)((i + 1) % 3) }) == edgesToBranes.end())
+                    abort();
+                auto values = edgesToBranes.find({ (*iter)(i), (*iter)((i + 1) % 3) })->second;
+                auto found = false;
+                for (auto iter2 = values.begin(); iter2 != values.end(); ++iter) {
+                    if (*iter2 == idx) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    abort();
+            }
+        }
+    }
+
+    void testEdgeMatching() {
+        std::map<std::array<uint32_t, 2>, int> counts;
         for (auto iter = branes.begin(); iter != branes.end(); ++iter) {
-            if (edgesToBranes.find({ (*iter)(0), (*iter)(1) }) == edgesToBranes.end())
+            ++counts[{(*iter)(0), (*iter)(1)}];
+            ++counts[{(*iter)(1), (*iter)(2)}];
+            ++counts[{(*iter)(2), (*iter)(0)}];
+            --counts[{(*iter)(1), (*iter)(0)}];
+            --counts[{(*iter)(2), (*iter)(1)}];
+            --counts[{(*iter)(0), (*iter)(2)}];
+        }
+        for (auto iter = negativeTriangles.begin(); iter != negativeTriangles.end(); ++iter) {
+            ++counts[{(iter->vertices)(0), (iter->vertices)(1)}];
+            ++counts[{(iter->vertices)(1), (iter->vertices)(2)}];
+            ++counts[{(iter->vertices)(2), (iter->vertices)(0)}];
+            --counts[{(iter->vertices)(1), (iter->vertices)(0)}];
+            --counts[{(iter->vertices)(2), (iter->vertices)(1)}];
+            --counts[{(iter->vertices)(0), (iter->vertices)(2)}];
+        }
+        for (auto iter = counts.begin(); iter != counts.end(); ++iter) {
+            if (iter->second != 0)
                 abort();
         }
     }

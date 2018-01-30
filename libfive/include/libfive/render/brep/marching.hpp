@@ -30,11 +30,11 @@ static constexpr unsigned _pow(unsigned P, unsigned N)
 { return (N == 0) ? 1 : P * _pow(P, N - 1); }
 
 /*  Returns the number of vertices in an N-dimensional cube */
-static constexpr int _verts(unsigned N)
+static constexpr unsigned int _verts(unsigned N)
 { return _pow(2, N); }
 
 /*  Returns the number of edges in an N-dimensional cube */
-static constexpr int _edges(unsigned N)
+static constexpr unsigned int _edges(unsigned N)
 { return (N == 0) ? 0 : (_edges(N - 1) * 2 + _verts(N - 1)); }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -73,6 +73,18 @@ template <unsigned N>
 using EdgeToPatch = std::array<std::array<int, _edges(N) * 2>,
                                _pow(2, _verts(N))>;
 
+// In 3d, FaceToPatch is indexed by [mask][face], where face is 0-2 for faces
+// adjoining region.lower and 3-5 for faces adjoining region.upper, with
+// 0 and 3 for x-axis faces, 1 and 4 for y-axis, and 2 and 5 for z-axis.
+// It returns a patch index, or -1 if the face is all empty/all full, or
+// -2 if the face has two distinct patches.
+// In 2d, FaceToPatch is undefined and should not be used (EdgeToPatch
+// serves the equivalent purpose.)
+
+template <unsigned N>
+using FaceToPatch = std::array<std::array<int, 2 * N>,
+  _pow(2, _verts(N))>;
+
 ////////////////////////////////////////////////////////////////////////////////
 
 template <unsigned N>
@@ -81,6 +93,7 @@ struct MarchingTable
     VertsToPatches<N> v;
     VertsToEdge<N> e;
     EdgeToPatch<N> p;
+    FaceToPatch<N> ftp;
 };
 
 template <unsigned N>
