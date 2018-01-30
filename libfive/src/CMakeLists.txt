@@ -22,6 +22,7 @@ add_library(ao-kernel STATIC
    ../include/libfive/render/brep/eval_xtree.hpp
    ../include/libfive/render/brep/marching.hpp
    ../include/libfive/render/brep/mesh.hpp
+   ../include/libfive/render/brep/partial_octree.h
    ../include/libfive/render/brep/region.hpp
    ../include/libfive/render/brep/xtree.hpp
    ../include/libfive/render/discrete/eval_height.hpp
@@ -34,6 +35,7 @@ add_library(ao-kernel STATIC
    ../include/libfive/tree/template.hpp
    ../include/libfive/tree/tree.hpp
    ../include/libfive.h
+   
 
     eval/base.cpp
     eval/eval_array.cpp
