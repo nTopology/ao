@@ -30,6 +30,9 @@ template <Axis::Axis A, bool D>
 void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
 {
     int es[4];
+    int fs[4] = { -1, -1, -1, -1 }; //-1 means our edge is an edge of that XTree, 
+                                    //so the XTree doesn't adjoin the edge by a face.
+
     {   // Unpack edge vertex pairs into edge indices
         auto q = Axis::Q(A);
         auto r = Axis::R(A);
@@ -44,17 +47,22 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
                                    [D ? ev[i].second : ev[i].first];
             assert(es[i] != -1);
         }
+        for (auto i = 0; i < 4; i += 3) {
+          if (ts[i] == ts[i ^ 1])
+            fs[i] = fs[i ^ 1] = Axis::toIndex(Axis::R(A)) + 3 - i;
+          else if (ts[i] == ts[i ^ 2])
+            fs[i] = fs[i ^ 2] = Axis::toIndex(Axis::Q(A)) + 3 - i;
+        }
     }
 
     uint32_t vs[4];
     for (unsigned i=0; i < ts.size(); ++i)
     {
-        // Load either a patch-specific vertex (if this is a lowest-level,
-        // potentially non-manifold cell) or the default vertex
-        auto vi = ts[i]->level > 0
-            ? 0
+        // Load the appropriate patch-specific vertex
+      auto vi = fs[i] != -1
+            ? XTree<3>::mt->ftp[ts[i]->corner_mask][fs[i]]
             : XTree<3>::mt->p[ts[i]->corner_mask][es[i]];
-        assert(vi != -1);
+        assert(vi >= 0 && vi < 4);
 
         // Sanity-checking manifoldness of collapsed cells
         assert(ts[i]->level == 0 || ts[i]->vertex_count == 1);
@@ -94,22 +102,14 @@ void Mesh::load(const std::array<const XTree<3>*, 4>& ts)
     saveNorm(3, 2, 1);
     if (norms[0].dot(norms[3]) > norms[1].dot(norms[2]))
     {
-        if (vs[0] != vs[1] && vs[0] != vs[2]) {
-            addTriangle({ vs[1], vs[2], vs[0] }, A, D);
-            //The order of the triangle matters for negative triangle processing; the one whose diagonal opposite is not included should be last.
-        }
-        if (vs[3] != vs[1] && vs[3] != vs[2]) {
-            addTriangle({ vs[2], vs[1], vs[3] }, A, D);
-        }
+        addTriangle({ vs[1], vs[2], vs[0] }, A, D);
+        //The order of the triangle matters for negative triangle processing; the one whose diagonal opposite is not included should be last.
+        addTriangle({ vs[2], vs[1], vs[3] }, A, D);
     }
     else
     {
-        if (vs[0] != vs[1] && vs[3] != vs[1]) {
-            addTriangle({ vs[3], vs[0], vs[1] }, A, D);
-    }
-        if (vs[0] != vs[2] && vs[3] != vs[2]) {
-            addTriangle({ vs[0], vs[3], vs[2] }, A, D);
-        }
+        addTriangle({ vs[3], vs[0], vs[1] }, A, D);
+        addTriangle({ vs[0], vs[3], vs[2] }, A, D);
     }
 }
 
@@ -182,6 +182,7 @@ std::unique_ptr<Mesh> Mesh::mesh(std::unique_ptr<const XTree<3>> xtree,
 #endif
         m->processNegativeTriangles();
         m->edgesToBranes.clear();
+        m->positiveTriangleExtraInfo.clear();
         return m;
     }
 }
@@ -200,6 +201,7 @@ void Mesh::processNegativeTriangles() {
                     break;
                 }
                 else if (iter->vertices(0) == triangle.vertices(1) && iter->vertices(1) == triangle.vertices(0)) {
+                  abort();
                     assert(false); //It seems this should not happen; if it does, we've got problems (the negative triangles form a cycle).  Consider throwing an exception.
                     return; //If not in debug mode, return and get some sort of mesh.
                 }
@@ -210,13 +212,13 @@ void Mesh::processNegativeTriangles() {
             removedTriangleIndexLocation = edgesToBranes.find({ triangle.vertices(1), triangle.vertices(0) });
             ++negativeTrianglesSwapped;
             if (negativeTrianglesSwapped >= negativeTriangles.size()) {
+              abort();
                 assert(false); //It seems this should not happen; if it does, we've got problems (the negative triangles form a cycle).  Consider throwing an exception.
                 return; //If not in debug mode, return and get some sort of mesh.
             }
         }
-        auto removedTriangleIndex = edgesToBranes[{triangle.vertices[1], triangle.vertices[0]}];
+        auto removedTriangleIndex = removedTriangleIndexLocation->second.back();
         auto removedTriangle = branes[removedTriangleIndex];
-        negativeTriangles.pop_back();
         uint32_t removedTriangleExtraPoint;
         if (removedTriangle(0) == triangle.vertices(0)) {
             assert(removedTriangle(2) == triangle.vertices(1));
@@ -231,44 +233,81 @@ void Mesh::processNegativeTriangles() {
             assert(removedTriangle(1) == triangle.vertices(1));
             removedTriangleExtraPoint = removedTriangle(0);
         }
+        negativeTriangles.pop_back();
+        auto extraInfo = positiveTriangleExtraInfo[removedTriangleIndex];
         removeTriangle(removedTriangleIndex);
-        addTriangle({ removedTriangleExtraPoint, triangle.vertices(1), triangle.vertices(2) }, triangle.A, triangle.D);
-        addTriangle({ triangle.vertices(0), removedTriangleExtraPoint, triangle.vertices(2) }, triangle.A, triangle.D);
+        addTriangle({ removedTriangleExtraPoint, triangle.vertices(1), triangle.vertices(2) }, extraInfo.first, extraInfo.second);
+        addTriangle({ triangle.vertices(0), removedTriangleExtraPoint, triangle.vertices(2) }, extraInfo.first, extraInfo.second);
     }
 }
 
-void Mesh::addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D) {
-    auto scaledOutwardNormal = (verts[vertices(1)] - verts[vertices(0)]).cross(verts[vertices(2)] - verts[vertices(0)]); //No need to normalize here.
+void Mesh::addTriangle(Eigen::Matrix<uint32_t, 3, 1> vertices, Axis::Axis A, bool D, bool force) {
+    if (vertices[0] == vertices[1] || vertices[1] == vertices[2] || vertices[0] == vertices[2])
+        return; //No point in adding a degenerate triangle.
+    /*auto scaledOutwardNormal = (verts[vertices(1)] - verts[vertices(0)]).cross(verts[vertices(2)] - verts[vertices(0)]); //No need to normalize here.
     Eigen::Vector3f axisVector({ 0.f, 0.f, 0.f });
     axisVector(Axis::toIndex(A)) = D ? 1.f : -1.f;
-    if (scaledOutwardNormal.dot(axisVector) < 0.f) { //We want to make it a negative triangle.
+    if (scaledOutwardNormal.dot(axisVector) < 0.f && !force) { //We want to make it a negative triangle.
         negativeTriangles.push_back(negativeTriangle{ vertices, A, D });
     }
-    else {
+    else {*/
         branes.push_back(vertices);
-        assert(edgesToBranes.find({ vertices(0), vertices(1) }) == edgesToBranes.end());
-        assert(edgesToBranes.find({ vertices(1), vertices(2) }) == edgesToBranes.end());
-        assert(edgesToBranes.find({ vertices(2), vertices(0) }) == edgesToBranes.end());
-        edgesToBranes[{vertices(0), vertices(1)}] = branes.size() - 1;
-        edgesToBranes[{vertices(1), vertices(2)}] = branes.size() - 1;
-        edgesToBranes[{vertices(2), vertices(0)}] = branes.size() - 1;
-    }
+        positiveTriangleExtraInfo.push_back({ A, D });
+        for (auto i = 0; i < 3; ++i) {
+          auto j = (i + 1) % 3;
+          auto location = edgesToBranes.find({ vertices(i), vertices(j) });
+          if (location == edgesToBranes.end()) {
+            edgesToBranes[{ vertices(i), vertices(j) }] = { branes.size() - 1 };
+          }
+          else {
+            location->second.push_back(branes.size() - 1);
+          }
+        }
+    //}
 }
 
-void Mesh::removeTriangle(uint32_t target) { //Makes use of the fact that the order doesn't matter to efficiently perform a mid-vector deletion.
+void Mesh::removeTriangle(uint32_t target) { //Makes use of the fact that the order doesn't matter to efficiently perform mid-vector deletions.
     auto removedTriangle = branes[target];
     auto lastTriangle = branes.back();
-    assert(edgesToBranes.find({ lastTriangle(0), lastTriangle(1) }) != edgesToBranes.end());
-    assert(edgesToBranes.find({ lastTriangle(1), lastTriangle(2) }) != edgesToBranes.end());
-    assert(edgesToBranes.find({ lastTriangle(2), lastTriangle(0) }) != edgesToBranes.end());
-    edgesToBranes[{lastTriangle(0), lastTriangle(1)}] = target;
-    edgesToBranes[{lastTriangle(1), lastTriangle(2)}] = target;
-    edgesToBranes[{lastTriangle(2), lastTriangle(0)}] = target;
-    edgesToBranes.erase({ removedTriangle(0), removedTriangle(1) });
-    edgesToBranes.erase({ removedTriangle(1), removedTriangle(2) });
-    edgesToBranes.erase({ removedTriangle(2), removedTriangle(0) });
+    for (auto i = 0; i < 3; ++i) {
+        auto j = (i + 1) % 3;
+        auto lastTriangleMapLocation = edgesToBranes.find({ lastTriangle(i), lastTriangle(j) });
+        assert(lastTriangleMapLocation != edgesToBranes.end());
+        for (auto iter = lastTriangleMapLocation->second.begin(); ; ++iter) {
+            if (iter == lastTriangleMapLocation->second.end()) {
+              assert(false); //This means edgesToBranes has been corrupted somehow.
+              break;
+            }
+            else if (*iter == branes.size() - 1) {
+              *iter = target;
+              break;
+            }
+        }
+        auto removedTriangleMapLocation = edgesToBranes.find({ removedTriangle(i), removedTriangle(j) });
+        assert(removedTriangleMapLocation != edgesToBranes.end());
+        if (removedTriangleMapLocation == edgesToBranes.end())
+          abort();
+        if (removedTriangleMapLocation->second.back() == target) {
+          removedTriangleMapLocation->second.pop_back();
+        }
+        else for (auto iter = removedTriangleMapLocation->second.begin(); ; ++iter) {
+          if (iter == removedTriangleMapLocation->second.end()) {
+            assert(false); //This means edgesToBranes has been corrupted somehow.
+            break;
+          }
+          else if (*iter == target) {
+            *iter = removedTriangleMapLocation->second.back();
+            removedTriangleMapLocation->second.pop_back();
+            break;
+          }
+        }
+        if (removedTriangleMapLocation->second.empty())
+          edgesToBranes.erase(removedTriangleMapLocation);
+    }
     branes[target] = branes.back();
+    positiveTriangleExtraInfo[target] = positiveTriangleExtraInfo.back();
     branes.pop_back();
+    positiveTriangleExtraInfo.pop_back();
 }
 
 void Mesh::line(const Eigen::Vector3f& a, const Eigen::Vector3f& b)
