@@ -45,7 +45,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
 {
     std::atomic_bool cancel(false);
     const std::map<Tree::Id, float> vars;
-    return build(t, vars, region, min_feature, max_err, /*multithread*/false, cancel);
+    return build(t, vars, region, min_feature, max_err, multithread, cancel);
 }
 
 template <unsigned N>
@@ -85,7 +85,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
         mt = Marching::buildTable<N>();
     }
 
-    TreesToSplit splitterHolder;
+    NodesToSplit splitterHolder;
     auto out = new XTree(es, region, min_feature, max_err, multithread, cancel, 
         nullptr, -1, splitterHolder, 0);
     
@@ -108,7 +108,7 @@ template <unsigned N>
 XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 double min_feature, double max_err, bool multithread,
                 std::atomic_bool& cancel, XTree<N>* parent, 
-                uint8_t childNumberOfParent, TreesToSplit& splittersHolder,
+                uint8_t childNumberOfParent, NodesToSplit& splittersHolder,
                 int depth)
     : region(region), parent(parent), childNumberOfParent(childNumberOfParent), 
       _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero()), depth(depth),
@@ -716,7 +716,7 @@ double XTree<N>::findVertex(unsigned index)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <unsigned N>
-XTree<N>* XTree<N>::neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder, 
+XTree<N>* XTree<N>::neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder, 
   Axis::Axis A, bool D) const {
   if (parent) {
     if (((childNumberOfParent & A) != 0) != D) {
@@ -734,7 +734,7 @@ XTree<N>* XTree<N>::neighbor(XTreeEvaluator* eval, double max_err, std::atomic_b
 }
 
 template <unsigned N>
-void XTree<N>::split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder) {
+void XTree<N>::split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder) {
     if (!isBranch()) { //Otherwise this is a no-op.
         vertex_count = 0;
         std::fill(index.begin(), index.end(), 0);
@@ -793,7 +793,7 @@ void XTree<N>::split(XTreeEvaluator* eval, double max_err, std::atomic_bool& can
 
 template <unsigned N>
 XTree<N>& XTree<N>::forceChild(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, 
-    TreesToSplit& splittersHolder, unsigned i) {
+    NodesToSplit& splittersHolder, unsigned i) {
     if (!isBranch()) split(eval, max_err, cancel, splittersHolder);
     return *children[i];
 }
