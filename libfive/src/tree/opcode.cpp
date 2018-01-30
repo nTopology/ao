@@ -184,6 +184,8 @@ std::string Opcode::toOpString(Opcode op) //Currently just expresses all primiti
         case LAST_OP: 
         default:    return "";
     }
+    assert(0);
+    return "";
 }
 
 bool Opcode::isCommutative(Opcode op)
@@ -230,7 +232,8 @@ bool Opcode::isCommutative(Opcode op)
         default:
           return false; //just to quiet the warning.
     }
-
+    assert(0);
+    return false;
 }
 
 }   // namespace Kernel
