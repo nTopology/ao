@@ -63,7 +63,10 @@ public:
         {
             case 0: return lower;
             case 1: return upper;
-            default: assert(false);
+            default: {
+              assert(false); 
+              return center();
+            }
         }
         assert(false);
         return lower;

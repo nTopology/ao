@@ -58,6 +58,20 @@ public:
      *  If incompatible, does nothing and returns false
      *  Otherwise, pushes to the front of the choice list and returns true
      */
+
+    //Determines whether N features are all compatible as one super-feature.
+    template <unsigned N>
+    static bool isCompatible(std::array<Feature, N> features) {
+      Feature testFeature;
+      for (auto featureIter = features.begin(); featureIter != features.end(); ++featureIter) {
+        for (auto epsilonIter = featureIter->epsilons.begin(); epsilonIter != featureIter->epsilons.end(); ++epsilonIter) {
+          if (!testFeature.push(*epsilonIter))
+            return false;
+        }
+      }
+      return true;
+    }
+
     bool push(const Eigen::Vector3d& e, Choice c={0, 0});
     bool push(const Eigen::Vector3d& e, PrimitiveChoice c);
 

@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <array>
 #include <atomic>
 #include <iostream>
+#include <mutex>
 
 #include <cstdint>
 
@@ -30,12 +31,27 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "libfive/render/brep/marching.hpp"
 #include "libfive/render/brep/eval_xtree.hpp"
 #include "libfive/eval/interval.hpp"
+#include "libfive/render/axes.hpp"
 
 namespace Kernel {
 
 template <unsigned N>
 class XTree
 {
+protected:
+  //Nested structs hold data used to construct XTrees; they are to be created locally in the build function and passed to the constructor.
+  struct TreesToSplit {
+    std::vector<XTree*> candidateTrees = std::vector<XTree*>();
+    std::mutex mMutex;
+    void process(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel) {
+      while (!candidateTrees.empty()) {
+        auto nextCandidate = candidateTrees.back();
+        candidateTrees.pop_back();
+        nextCandidate->split(eval, max_err, cancel, *this);
+      }
+    }
+  };
+
 public:
     /*
      *  Constructs an octree or quadtree by subdividing a region
@@ -112,10 +128,12 @@ public:
     const Region<N> region;
 
     /*  Children pointers, if this is a branch  */
-    std::array<std::unique_ptr<const XTree<N>>, 1 << N> children;
+    std::array<std::unique_ptr<XTree<N>>, 1 << N> children;
 
-    /*  level = max(map(level, children)) + 1  */
+    /*  level = max(map(level, children)) + 1  
+        depth = parent->depth + 1*/
     unsigned level=0;
+    unsigned depth;
 
     /*  Vertex locations, if this is a leaf
      *
@@ -154,8 +172,9 @@ public:
      *  (which could be more than one to keep the surface manifold */
     unsigned vertex_count=0;
 
-    /*  Marks whether this cell is manifold or not  */
-    bool manifold=false;
+    /*  Marks whether this cell is combinable (manifold and does not have
+    a descendant that needs to be split) or not  */
+    bool combinable=false;
 
     /*  Single copy of the marching squares / cubes table, lazily
      *  initialized when needed */
@@ -173,7 +192,8 @@ protected:
      */
     XTree(XTreeEvaluator* eval, Region<N> region,
           double min_feature, double max_err, bool multithread,
-          std::atomic_bool& cancel);
+          std::atomic_bool& cancel, XTree<N>* parent, uint8_t childNumberOfParent, 
+          TreesToSplit& splittersHolder, int depth);
 
     /*
      *  Searches for a vertex within the XTree cell, using the QEF matrices
@@ -212,6 +232,11 @@ protected:
      */
     bool leafsAreManifold() const;
 
+    //eval, max_err, cancel, and splittersHolder are passed in case the neighbor does not exist 
+    //and needs to be created by calling split.
+    XTree<N>* neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder, 
+      Axis::Axis A, bool D) const;
+
     /*  Mass point is the average intersection location *
      *  (the last coordinate is number of points summed) */
     Eigen::Matrix<double, N + 1, 1> _mass_point;
@@ -220,9 +245,22 @@ protected:
     Eigen::Matrix<double, N, N> AtA;
     Eigen::Matrix<double, N, 1> AtB;
     double BtB=0;
+    XTree<N>* parent; //nullptr for root
+    uint8_t childNumberOfParent; //if parent exists, parent->child(childNumberOfParent) returns *this.
 
     /*  Eigenvalue threshold for determining feature rank  */
     constexpr static double EIGENVALUE_CUTOFF=0.1f;
+
+    //Forces the tree to split; 
+    void split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder);
+
+    //If it's not a branch yet, calls split to ensure there is a child; also returns a non-const pointer.
+    XTree<N>& forceChild(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, TreesToSplit& splittersHolder, unsigned i);
+
+    //Should be called only on branches; tells whether this node's split was safe for the resulting mesh's topology,
+    //or will require the neighboring face to split as well.
+    bool faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const;
+
 };
 
 // Explicit template instantiation declarations
@@ -234,6 +272,9 @@ template <> bool XTree<3>::leafsAreManifold() const;
 
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const;
 template <> const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const;
+
+template <> bool XTree<2>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const;
+template <> bool XTree<3>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const;
 
 extern template class XTree<2>;
 extern template class XTree<3>;

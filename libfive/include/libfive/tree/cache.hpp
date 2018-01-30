@@ -68,7 +68,7 @@ public:
     static const YPos& YPrimRef() { return _YPos; }
     static const ZPos& ZPrimRef() { return _ZPos; }
 
-    std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> getPrimitives() { return primitives; }
+    const std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> getPrimitives() const { return primitives; }
 
     Node var();
     Node primitive(const Primitive& prim);

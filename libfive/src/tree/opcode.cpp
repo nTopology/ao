@@ -181,7 +181,8 @@ std::string Opcode::toOpString(Opcode op) //Currently just expresses all primiti
 
         case INVALID: // fallthrough
         case CONST:
-        case LAST_OP: return "";
+        case LAST_OP: 
+        default:    return "";
     }
     assert(0);
     return "";
@@ -228,6 +229,8 @@ bool Opcode::isCommutative(Opcode op)
         case MIN:
         case MAX:
             return true;
+        default:
+          return false; //just to quiet the warning.
     }
     assert(0);
     return false;
