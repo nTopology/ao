@@ -130,7 +130,7 @@ std::unique_ptr<Mesh> Mesh::render(
 {
     // Create the octree (multithreaded and cancellable)
     return mesh(XTree<3>::build(
-            t, vars, r, min_feature, max_err, true, cancel), cancel);
+            t, vars, r, min_feature, max_err, true, cancel, nullptr), cancel);
 }
 
 std::unique_ptr<Mesh> Mesh::render(
@@ -138,7 +138,7 @@ std::unique_ptr<Mesh> Mesh::render(
         const Region<3>& r, double min_feature, double max_err,
         std::atomic_bool& cancel)
 {
-    return mesh(XTree<3>::build(es, r, min_feature, max_err, true, cancel),
+    return mesh(XTree<3>::build(es, r, min_feature, max_err, true, cancel, nullptr),
                 cancel);
 }
 

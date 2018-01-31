@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "libfive/render/brep/eval_xtree.hpp"
 #include "libfive/eval/interval.hpp"
 #include "libfive/render/axes.hpp"
+#include "libfive/render/brep/partial_octree.h"
 
 namespace Kernel {
 
@@ -40,23 +41,27 @@ class XTree
 {
 protected:
   //Nested structs hold data used to construct XTrees; they are to be created locally in the build function and passed to the constructor.
+
+  struct ConstantBuildInfo;
+
   struct NodesToSplit {
-    std::vector<XTree*> candidateTrees = std::vector<XTree*>();
+    std::vector<XTree*> candidateTrees;
     std::mutex mMutex;
-    void process(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel) {
-      while (!candidateTrees.empty()) {
-        auto nextCandidate = candidateTrees.back();
-        candidateTrees.pop_back();
-        nextCandidate->split(eval, max_err, cancel, *this);
-      }
-    }
+    void process(XTreeEvaluator* eval, ConstantBuildInfo& info);
   };
 
   struct ConstantBuildInfo { //Allows a large number of variables to be passed around by reference.
+                             //"constant" refers to the fact that it doesn't change from node to node;
+                             //some of its members are still mutable.
     const double min_feature;
     const double max_err;
     std::atomic_bool& cancel;
-    NodesToSplit& splittersHolder;
+    NodesToSplit splittersHolder;
+    bool usePartialOctree;
+    ConstantBuildInfo(double min_feature, double max_err, 
+      std::atomic_bool& cancel, bool usePartialOctree) :
+      min_feature(min_feature), max_err(max_err), cancel(cancel),
+      usePartialOctree(usePartialOctree) { ; }
   };
 
 public:
@@ -66,7 +71,8 @@ public:
      */
     static std::unique_ptr<const XTree> build(
             Tree t, Region<N> region, double min_feature=0.1,
-            double max_err=1e-8, bool multithread=true);
+            double max_err=1e-8, bool multithread=true, 
+            PartialOctree* parallelOctree = nullptr);
 
     /*
      *  Fully-specified XTree builder (stoppable through cancel)
@@ -75,7 +81,8 @@ public:
             Tree t, const std::map<Tree::Id, float>& vars,
             Region<N> region, double min_feature,
             double max_err, bool multithread,
-            std::atomic_bool& cancel);
+            std::atomic_bool& cancel,
+            PartialOctree* parallelOctree);
 
     /*
      *  XTree builder that re-uses existing evaluators
@@ -85,7 +92,8 @@ public:
             XTreeEvaluator* es,
             Region<N> region, double min_feature,
             double max_err, bool multithread,
-            std::atomic_bool& cancel);
+            std::atomic_bool& cancel,
+            PartialOctree* parallelOctree);
 
     /*
      *  Checks whether this tree splits
@@ -198,9 +206,9 @@ protected:
      *  be distributed across multiple threads.
      */
     XTree(XTreeEvaluator* eval, Region<N> region,
-          double min_feature, double max_err, bool multithread,
-          std::atomic_bool& cancel, XTree<N>* parent, uint8_t childNumberOfParent, 
-          NodesToSplit& splittersHolder, int depth);
+          ConstantBuildInfo& info, bool multithread,
+          XTree<N>* parent, uint8_t childNumberOfParent, 
+          int depth, PartialOctree* parallelOctree);
 
     /*
      *  Searches for a vertex within the XTree cell, using the QEF matrices
@@ -239,10 +247,9 @@ protected:
      */
     bool leafsAreManifold() const;
 
-    //eval, max_err, cancel, and splittersHolder are passed in case the neighbor does not exist 
+    //info is passed in case the neighbor does not exist 
     //and needs to be created by calling split.
-    XTree<N>* neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder, 
-      Axis::Axis A, bool D) const;
+    XTree<N>* neighbor(XTreeEvaluator* eval, ConstantBuildInfo& info, Axis::Axis A, bool D) const;
 
     /*  Mass point is the average intersection location *
      *  (the last coordinate is number of points summed) */
@@ -259,10 +266,10 @@ protected:
     constexpr static double EIGENVALUE_CUTOFF=0.1f;
 
     //Forces the tree to split; 
-    void split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder);
+    void split(XTreeEvaluator* eval, ConstantBuildInfo& info);
 
     //If it's not a branch yet, calls split to ensure there is a child; also returns a non-const pointer.
-    XTree<N>& forceChild(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder, unsigned i);
+    XTree<N>& forceChild(XTreeEvaluator* eval, ConstantBuildInfo& info, unsigned i);
 
     //Should be called only on branches; tells whether this node's split was safe for the resulting mesh's topology,
     //or will require the neighboring face to split as well.
