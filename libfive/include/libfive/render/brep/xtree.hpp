@@ -40,23 +40,24 @@ class XTree
 {
 protected:
   //Nested structs hold data used to construct XTrees; they are to be created locally in the build function and passed to the constructor.
+
+  struct ConstantBuildInfo;
+
   struct NodesToSplit {
-    std::vector<XTree*> candidateTrees = std::vector<XTree*>();
+    std::vector<XTree*> candidateTrees;
     std::mutex mMutex;
-    void process(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel) {
-      while (!candidateTrees.empty()) {
-        auto nextCandidate = candidateTrees.back();
-        candidateTrees.pop_back();
-        nextCandidate->split(eval, max_err, cancel, *this);
-      }
-    }
+    void process(XTreeEvaluator* eval, ConstantBuildInfo& info, std::atomic_bool& cancel);
   };
 
   struct ConstantBuildInfo { //Allows a large number of variables to be passed around by reference.
+                             //"constant" refers to the fact that it doesn't change from node to node;
+                             //some of its members are still mutable.
     const double min_feature;
     const double max_err;
     std::atomic_bool& cancel;
-    NodesToSplit& splittersHolder;
+    NodesToSplit splittersHolder;
+    ConstantBuildInfo(double min_feature, double max_err, std::atomic_bool& cancel) :
+      min_feature(min_feature), max_err(max_err), cancel(cancel) { ; }
   };
 
 public:
@@ -198,7 +199,7 @@ protected:
      *  be distributed across multiple threads.
      */
     XTree(XTreeEvaluator* eval, Region<N> region,
-          double min_feature, double max_err, bool multithread,
+          double min_feature, ConstantBuildInfo& info, bool multithread,
           std::atomic_bool& cancel, XTree<N>* parent, uint8_t childNumberOfParent, 
           NodesToSplit& splittersHolder, int depth);
 
@@ -239,9 +240,9 @@ protected:
      */
     bool leafsAreManifold() const;
 
-    //eval, max_err, cancel, and splittersHolder are passed in case the neighbor does not exist 
+    //info is passed in case the neighbor does not exist 
     //and needs to be created by calling split.
-    XTree<N>* neighbor(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder, 
+    XTree<N>* neighbor(XTreeEvaluator* eval, ConstantBuildInfo& info, std::atomic_bool& cancel, NodesToSplit& splittersHolder, 
       Axis::Axis A, bool D) const;
 
     /*  Mass point is the average intersection location *
@@ -259,10 +260,10 @@ protected:
     constexpr static double EIGENVALUE_CUTOFF=0.1f;
 
     //Forces the tree to split; 
-    void split(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder);
+    void split(XTreeEvaluator* eval, ConstantBuildInfo& info, std::atomic_bool& cancel, NodesToSplit& splittersHolder);
 
     //If it's not a branch yet, calls split to ensure there is a child; also returns a non-const pointer.
-    XTree<N>& forceChild(XTreeEvaluator* eval, double max_err, std::atomic_bool& cancel, NodesToSplit& splittersHolder, unsigned i);
+    XTree<N>& forceChild(XTreeEvaluator* eval, ConstantBuildInfo& info, std::atomic_bool& cancel, NodesToSplit& splittersHolder, unsigned i);
 
     //Should be called only on branches; tells whether this node's split was safe for the resulting mesh's topology,
     //or will require the neighboring face to split as well.
