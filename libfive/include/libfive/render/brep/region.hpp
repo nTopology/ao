@@ -65,7 +65,7 @@ public:
             case 1: return upper;
             default: {
               assert(false); 
-              return center();
+              return lower;
             }
         }
         assert(false);
