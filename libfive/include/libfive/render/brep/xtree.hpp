@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "libfive/render/brep/eval_xtree.hpp"
 #include "libfive/eval/interval.hpp"
 #include "libfive/render/axes.hpp"
+#include "libfive/render/brep/partial_octree.h"
 
 namespace Kernel {
 
@@ -56,8 +57,11 @@ protected:
     const double max_err;
     std::atomic_bool& cancel;
     NodesToSplit splittersHolder;
-    ConstantBuildInfo(double min_feature, double max_err, std::atomic_bool& cancel) :
-      min_feature(min_feature), max_err(max_err), cancel(cancel) { ; }
+    bool usePartialOctree;
+    ConstantBuildInfo(double min_feature, double max_err, 
+      std::atomic_bool& cancel, bool usePartialOctree) :
+      min_feature(min_feature), max_err(max_err), cancel(cancel),
+      usePartialOctree(usePartialOctree) { ; }
   };
 
 public:
@@ -67,7 +71,8 @@ public:
      */
     static std::unique_ptr<const XTree> build(
             Tree t, Region<N> region, double min_feature=0.1,
-            double max_err=1e-8, bool multithread=true);
+            double max_err=1e-8, bool multithread=true, 
+            PartialOctree* parallelOctree = nullptr);
 
     /*
      *  Fully-specified XTree builder (stoppable through cancel)
@@ -76,7 +81,8 @@ public:
             Tree t, const std::map<Tree::Id, float>& vars,
             Region<N> region, double min_feature,
             double max_err, bool multithread,
-            std::atomic_bool& cancel);
+            std::atomic_bool& cancel,
+            PartialOctree* parallelOctree);
 
     /*
      *  XTree builder that re-uses existing evaluators
@@ -86,7 +92,8 @@ public:
             XTreeEvaluator* es,
             Region<N> region, double min_feature,
             double max_err, bool multithread,
-            std::atomic_bool& cancel);
+            std::atomic_bool& cancel,
+            PartialOctree* parallelOctree);
 
     /*
      *  Checks whether this tree splits
@@ -201,7 +208,7 @@ protected:
     XTree(XTreeEvaluator* eval, Region<N> region,
           ConstantBuildInfo& info, bool multithread,
           XTree<N>* parent, uint8_t childNumberOfParent, 
-          int depth);
+          int depth, PartialOctree* parallelOctree);
 
     /*
      *  Searches for a vertex within the XTree cell, using the QEF matrices

@@ -41,11 +41,11 @@ std::unique_ptr<const Marching::MarchingTable<N>> XTree<N>::mt;
 template <unsigned N>
 std::unique_ptr<const XTree<N>> XTree<N>::build(
         Tree t, Region<N> region, double min_feature,
-        double max_err, bool multithread)
+        double max_err, bool multithread, PartialOctree* parallelOctree)
 {
     std::atomic_bool cancel(false);
     const std::map<Tree::Id, float> vars;
-    return build(t, vars, region, min_feature, max_err, multithread, cancel);
+    return build(t, vars, region, min_feature, max_err, multithread, cancel, parallelOctree);
 }
 
 template <unsigned N>
@@ -53,7 +53,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
             Tree t, const std::map<Tree::Id, float>& vars,
             Region<N> region, double min_feature,
             double max_err, bool multithread,
-            std::atomic_bool& cancel)
+            std::atomic_bool& cancel, PartialOctree* parallelOctree)
 {
     if (multithread)
     {
@@ -63,12 +63,12 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
         {
             es.emplace_back(XTreeEvaluator(t, vars));
         }
-        return build(es.data(), region, min_feature, max_err, true, cancel);
+        return build(es.data(), region, min_feature, max_err, true, cancel, parallelOctree);
     }
     else
     {
         XTreeEvaluator e(t, vars);
-        return build(&e, region, min_feature, max_err, false, cancel);
+        return build(&e, region, min_feature, max_err, false, cancel, parallelOctree);
     }
 }
 
@@ -77,7 +77,7 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
         XTreeEvaluator* es,
         Region<N> region, double min_feature,
         double max_err, bool multithread,
-        std::atomic_bool& cancel)
+        std::atomic_bool& cancel, PartialOctree* parallelOctree)
 {
     // Lazy initialization of marching squares / cubes table
     if (mt.get() == nullptr)
@@ -85,9 +85,9 @@ std::unique_ptr<const XTree<N>> XTree<N>::build(
         mt = Marching::buildTable<N>();
     }
 
-    ConstantBuildInfo info(min_feature, max_err, cancel);
+    ConstantBuildInfo info(min_feature, max_err, cancel, parallelOctree);
     auto out = new XTree(es, region, info, multithread, 
-        nullptr, -1, 0);
+        nullptr, -1, 0, parallelOctree);
     
     info.splittersHolder.process(es, info);
 
@@ -108,7 +108,7 @@ template <unsigned N>
 XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 ConstantBuildInfo& info, bool multithread,
                 XTree<N>* parent, uint8_t childNumberOfParent,
-                int depth)
+                int depth, PartialOctree* parallelOctree)
     : region(region), parent(parent), childNumberOfParent(childNumberOfParent), 
       _mass_point(Eigen::Matrix<double, N + 1, 1>::Zero()), depth(depth),
       AtA(Eigen::Matrix<double, N, N>::Zero()),
@@ -116,6 +116,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
 {
     if (info.cancel.load())
     {
+        return;
+    }
+
+    if (info.usePartialOctree && !parallelOctree) {
+        type = Interval::OUTOFSCOPE;
+        combinable = false;
+        std::fill(corners.begin(), corners.end(), type);
         return;
     }
 
@@ -155,10 +162,14 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 for (unsigned i=0; i < children.size(); ++i)
                 {
                     futures[i] = std::async(std::launch::async,
-                        [&eval, &rs, i, &info, this, depth]()
+                        [&eval, &rs, i, &info, this, depth,
+                        parallelOctree]()
                         { return new XTree(
                                 eval + i, rs[i], info,
-                                false, this, i, depth + 1); });
+                                false, this, i, depth + 1,
+                                parallelOctree ? 
+                                    parallelOctree -> children[i].get() : 
+                                    nullptr); });
                 }
                 for (unsigned i=0; i < children.size(); ++i)
                 {
@@ -173,7 +184,10 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                     // Populate child recursively
                     children[i].reset(new XTree<N>(
                                 eval, rs[i], info,
-                                false, this, i, depth + 1));
+                                false, this, i, depth + 1,
+                                parallelOctree ? 
+                                    parallelOctree->children[i].get() :
+                                    nullptr));
                 }
             }
 
@@ -191,8 +205,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                 // Grab corner values from children
                 corners[i] = children[i]->corners[i];
 
-                all_empty &= children[i]->type == Interval::EMPTY;
-                all_full  &= children[i]->type == Interval::FILLED;
+                all_empty &= children[i]->type == Interval::EMPTY || children[i]->type == Interval::OUTOFSCOPE;
+                all_full  &= children[i]->type == Interval::FILLED || children[i]->type == Interval::OUTOFSCOPE;
             }
         }
         // Terminate recursion here
@@ -646,9 +660,13 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
               }
             }
             if (vertOutside) {
-                if ((insideVert.transpose() * AtA * insideVert - 2 * insideVert.transpose() * AtB)[0] -
-                (vert(vertex_count - 1).transpose() * AtA * vert(vertex_count - 1) - 2 * vert(vertex_count - 1).transpose() * AtB)[0]
-                < info.max_err) {
+                if (info.usePartialOctree || 
+                    (insideVert.transpose() * AtA * insideVert - 
+                    2 * insideVert.transpose() * AtB)[0] -
+                    (vert(vertex_count - 1).transpose() * AtA *
+                    vert(vertex_count - 1) - 2 * 
+                    vert(vertex_count - 1).transpose() * AtB)[0]
+                    < info.max_err) {
                   if (forceMove) {
                       verts.col(vertex_count - 1) = insideVert;
                   }
@@ -744,7 +762,7 @@ void XTree<N>::split(XTreeEvaluator* eval, ConstantBuildInfo& info) {
             // Populate child recursively
             children[i].reset(new XTree<N>(
                 eval, rs[i], info,
-                false, this, i, depth + 1));
+                false, this, i, depth + 1, nullptr));
         }
         if (info.cancel.load())
         {
