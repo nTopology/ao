@@ -222,6 +222,7 @@ OP_BINARY(pow);
 OP_BINARY(nth_root);
 OP_BINARY(mod);
 OP_BINARY(nanfill);
+OP_BINARY(useInterval);
 #undef OP_BINARY
 
 /*
