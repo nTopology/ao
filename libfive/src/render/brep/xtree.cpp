@@ -627,7 +627,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             // of the vertex array and ignoring the error result (because
             // this is the bottom of the recursion)
             findVertex(vertex_count++);
-            auto insideVert = vert(vertex_count - 1);
+            /*auto insideVert = vert(vertex_count - 1);
             auto vertOutside = false;
             auto forceMove = false; //Set to true if leaving the vertex outside will result in crossing over an active face,
                                     //and it needs to be moved if not splitting.
@@ -681,7 +681,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                     combinable = false;
                     return;
                 }
-            }
+            }*/
         }
     }
     // ...and we're done.
