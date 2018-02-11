@@ -497,7 +497,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                     // Find normalized derivatives and distance value
                     Eigen::Matrix<double, N + 1, 1> dv;
                     dv << derivs / norm, ds.col(i).w() / norm;
-                    if (!dv.array().isNaN().any())
+                    if (!dv.array().isNaN().any() && !dv.array().isInf().any())
                     {
                         intersections.push_back({
                             (i & 1) ? targets[i/2].second : targets[i/2].first,
@@ -531,7 +531,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                         // Find normalized derivatives and distance value
                         Eigen::Matrix<double, N + 1, 1> dv;
                         dv << derivs / norm, ds.w() / norm;
-                        if (!dv.array().isNaN().any())
+                        if (!dv.array().isNaN().any() && !dv.array().isInf().any())
                         {
                             intersections.push_back({
                                 (i & 1) ? targets[i/2].second
@@ -630,9 +630,18 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
 
               std::string sep = "\n----------------------------------------\n";
               Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
-              myfile << sep << "AtB In findVertex" << sep << AtB.format(CleanFmt) << sep;
+              myfile << "AtB In findVertex\n" << AtB.format(CleanFmt) 
+                << sep << "b\n" << b.format(CleanFmt) << "\nAt\n"<< At.format(CleanFmt)<<sep;
+
+              for (unsigned i = 0; i < intersections.size(); ++i)
+              {
+                myfile << "intersectionFirst" << std::to_string(i) << "\n" << intersections[i].first.format(CleanFmt) << sep;
+                myfile << "intersectionSecond" << std::to_string(i) << "\n" << intersections[i].second.format(CleanFmt) << sep;
+
+              }
               myfile.close();
             }
+
             // Find the vertex position, storing into the appropriate column
             // of the vertex array and ignoring the error result (because
             // this is the bottom of the recursion)
