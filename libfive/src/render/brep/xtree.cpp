@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <numeric>
 #include <functional>
 #include <limits>
+#include <fstream>
 
 #include <cmath>
 
@@ -496,7 +497,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                     // Find normalized derivatives and distance value
                     Eigen::Matrix<double, N + 1, 1> dv;
                     dv << derivs / norm, ds.col(i).w() / norm;
-                    if (!dv.array().isNaN().any())
+                    if (dv.array().isFinite().all())
                     {
                         intersections.push_back({
                             (i & 1) ? targets[i/2].second : targets[i/2].first,
@@ -530,7 +531,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
                         // Find normalized derivatives and distance value
                         Eigen::Matrix<double, N + 1, 1> dv;
                         dv << derivs / norm, ds.w() / norm;
-                        if (!dv.array().isNaN().any())
+                        if (dv.array().isFinite().all())
                         {
                             intersections.push_back({
                                 (i & 1) ? targets[i/2].second
@@ -627,6 +628,7 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             // of the vertex array and ignoring the error result (because
             // this is the bottom of the recursion)
             findVertex(vertex_count++);
+
             /*auto insideVert = vert(vertex_count - 1);
             auto vertOutside = false;
             auto forceMove = false; //Set to true if leaving the vertex outside will result in crossing over an active face,
