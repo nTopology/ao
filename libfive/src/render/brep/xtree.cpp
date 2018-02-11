@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <numeric>
 #include <functional>
 #include <limits>
+#include <fstream>
 
 #include <cmath>
 
@@ -624,8 +625,8 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             BtB = b.transpose() * b;
 
             if (AtB.array().isInf().any()) {
-              ofstream myfile;
-              myfile.open("VertsOut.txt", ios::app);
+              std::ofstream myfile;
+              myfile.open("VertsOut.txt", std::ios::app);
 
               std::string sep = "\n----------------------------------------\n";
               Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
@@ -735,8 +736,8 @@ double XTree<N>::findVertex(unsigned index)
 
 
     if (AtB.array().isInf().any()) {
-      ofstream myfile;
-      myfile.open("VertsOut.txt", ios::app);
+      std::ofstream myfile;
+      myfile.open("VertsOut.txt", std::ios::app);
 
       myfile <<sep <<"AtB In findVertex" << sep << AtB.format(CleanFmt) << sep;
       myfile.close();
@@ -747,8 +748,8 @@ double XTree<N>::findVertex(unsigned index)
     Vec v = AtAp * (AtB - (AtA * center)) + center;
 
     if (v.array().isNaN().any()) {
-      ofstream myfile;
-      myfile.open("VertsOut.txt", ios::app);
+      std::ofstream myfile;
+      myfile.open("VertsOut.txt", std::ios::app);
 
       myfile << sep << "v In findVertex" << sep << AtB.format(CleanFmt) << sep;
       myfile.close();
