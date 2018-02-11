@@ -623,6 +623,15 @@ XTree<N>::XTree(XTreeEvaluator* eval, Region<N> region,
             AtB = At * b;
             BtB = b.transpose() * b;
 
+            if (AtB.array().isInf().any()) {
+              ofstream myfile;
+              myfile.open("VertsOut.txt", ios::app);
+
+              std::string sep = "\n----------------------------------------\n";
+              Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
+              myfile << sep << "AtB In findVertex" << sep << AtB.format(CleanFmt) << sep;
+              myfile.close();
+            }
             // Find the vertex position, storing into the appropriate column
             // of the vertex array and ignoring the error result (because
             // this is the bottom of the recursion)
@@ -720,10 +729,30 @@ double XTree<N>::findVertex(unsigned index)
     // Pseudo-inverse of A
     auto AtAp = (U * D * U.transpose()).eval();
 
+    //check if AtB is nan:
+    std::string sep = "\n----------------------------------------\n";
+    Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
+
+
+    if (AtB.array().isInf().any()) {
+      ofstream myfile;
+      myfile.open("VertsOut.txt", ios::app);
+
+      myfile <<sep <<"AtB In findVertex" << sep << AtB.format(CleanFmt) << sep;
+      myfile.close();
+    }
+
     // Solve for vertex position (minimizing distance to center)
     auto center = massPoint();
     Vec v = AtAp * (AtB - (AtA * center)) + center;
 
+    if (v.array().isNaN().any()) {
+      ofstream myfile;
+      myfile.open("VertsOut.txt", ios::app);
+
+      myfile << sep << "v In findVertex" << sep << AtB.format(CleanFmt) << sep;
+      myfile.close();
+    }
     // Store this specific vertex in the verts matrix
     verts.col(index) = v;
 
