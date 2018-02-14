@@ -130,6 +130,8 @@ std::list<Tree> Tree::ordered() const
 
 void Tree::serialize(std::ostream& oss) const {
   oss << "tree";
+  auto treeVec = serialize();
+  for (auto i : treeVec) { oss << i; }
   for (auto i : ordered()) {
     if (i->prim) {
       i->prim->serialize(oss);
