@@ -165,6 +165,8 @@ public:
      */
     std::vector<uint8_t> serialize() const;
 
+    void serialize(std::ostream& oss) const;
+
     /*
      *  Deserialize a tree from a set of bytes
      */

@@ -128,6 +128,16 @@ std::list<Tree> Tree::ordered() const
     return out;
 }
 
+void Tree::serialize(std::ostream& oss) const {
+  oss << "tree";
+  for (auto i : ordered()) {
+    if (i->prim) {
+      i->prim->serialize(oss);
+    }
+  }
+  oss << "\n";
+}
+
 std::vector<uint8_t> Tree::serialize() const
 {
     return Template(*this).serialize();

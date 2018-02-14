@@ -35,7 +35,7 @@ public:
 
   virtual float getValue(Eigen::Vector3f point) const = 0;
 
-  virtual void serialize(std::ostream& oss) {}
+  virtual void serialize(std::ostream& oss) const {}
 
   virtual prioritizationType getPrioritizationType(Eigen::Vector3f point) const = 0;
   //Indicates whether to optimize features based on the assumption that it follows the branch that minimizes
