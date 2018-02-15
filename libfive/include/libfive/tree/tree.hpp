@@ -39,6 +39,11 @@ class Tree
 {
 public:
     /*
+     *  Empty tree constructor
+     */
+    explicit Tree();
+
+    /*
      *  Returns a Tree for the given constant
      */
     Tree(float v);
@@ -47,6 +52,8 @@ public:
     *  Returns a Tree for the given primitive
     */
     Tree(const Primitive& prim);
+
+    //Tree();
 
     /*
      *  Constructors for individual axes
@@ -167,6 +174,8 @@ public:
 
     void serialize(std::ostream& oss) const;
 
+    Tree deserialize(std::istream& iss) const;
+
     /*
      *  Deserialize a tree from a set of bytes
      */
@@ -178,10 +187,6 @@ public:
     static Tree load(const std::string& filename);
 
 protected:
-    /*
-     *  Empty tree constructor
-     */
-    explicit Tree();
 
     /*
      *  Private constructor

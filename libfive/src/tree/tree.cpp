@@ -129,7 +129,6 @@ std::list<Tree> Tree::ordered() const
 }
 
 void Tree::serialize(std::ostream& oss) const {
-  oss << "tree";
   auto treeVec = serialize();
   for (auto i : treeVec) { oss << i; }
   for (auto i : ordered()) {
@@ -137,7 +136,15 @@ void Tree::serialize(std::ostream& oss) const {
       i->prim->serialize(oss);
     }
   }
-  oss << "\n";
+}
+
+Tree Tree::deserialize(std::istream& iss) const {
+  std::vector<uint8_t> data;
+  char c;
+  while (iss.get(c)) {
+    data.push_back((uint8_t)c);
+  }
+  return deserialize(data);
 }
 
 std::vector<uint8_t> Tree::serialize() const
