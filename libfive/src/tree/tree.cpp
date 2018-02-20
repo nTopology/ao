@@ -100,6 +100,7 @@ Tree::Tree_::~Tree_()
 std::list<Tree> Tree::ordered() const
 {
     std::set<Id> found = {nullptr};
+    std::vector<Tree::Tree_*> heap;
     std::list<std::shared_ptr<Tree_>> todo = { ptr };
     std::map<unsigned, std::list<std::shared_ptr<Tree_>>> ranks;
 
@@ -113,6 +114,7 @@ std::list<Tree> Tree::ordered() const
             todo.push_back(t->lhs);
             todo.push_back(t->rhs);
             found.insert(t.get());
+            heap.push_back(t.get());
             ranks[t->rank].push_back(t);
         }
     }
@@ -128,14 +130,47 @@ std::list<Tree> Tree::ordered() const
     return out;
 }
 
+std::vector<Tree::Tree_*> Tree::heap() const
+{
+    std::set<Id> found = {nullptr};
+    std::vector<Tree::Tree_*> heap;
+    std::list<std::shared_ptr<Tree_>> todo = { ptr };
+    std::map<unsigned, std::list<std::shared_ptr<Tree_>>> ranks;
+
+    while (todo.size())
+    {
+        auto t = todo.front();
+        todo.pop_front();
+
+        if (found.find(t.get()) == found.end())
+        {
+            todo.push_back(t->lhs);
+            todo.push_back(t->rhs);
+            found.insert(t.get());
+            heap.push_back(t.get());
+            ranks[t->rank].push_back(t);
+        }
+    }
+
+    //std::list<Tree> out;
+    //for (auto& r : ranks)
+    //{
+    //    for (auto& t : r.second)
+    //    {
+    //        out.push_back(Tree(t));
+    //    }
+    //}
+    return heap;
+}
+
 void Tree::serialize(std::ostream& oss) const {
   auto treeVec = serialize();
   for (auto i : treeVec) { oss << i; }
-  for (auto i : ordered()) {
-    if (i->prim) {
-      i->prim->serialize(oss);
-    }
-  }
+  //for (auto i : ordered()) {
+  //  if (i->prim) {
+  //    i->prim->serialize(oss);
+  //  }
+  //}
 }
 
 Tree Tree::deserialize(std::istream& iss) const {

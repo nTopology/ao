@@ -35,6 +35,10 @@ class Cache
     /*  Helper typedef to avoid writing this over and over again  */
     typedef std::shared_ptr<Tree::Tree_> Node;
 
+    typedef std::tuple<Opcode::Opcode,  /* opcode */
+                       Tree::Id,        /* lhs */
+                       Tree::Id         /* rhs */ > Key;
+
     /*  Handle to safely access cache  */
     class Handle
     {
@@ -68,6 +72,8 @@ public:
     static const YPos& YPrimRef() { return _YPos; }
     static const ZPos& ZPrimRef() { return _ZPos; }
 
+    const std::map<float, std::weak_ptr<Tree::Tree_>> getConstants() const { return constants; }
+    const std::map<Key, std::weak_ptr<Tree::Tree_>> getOps() const { return ops; }
     const std::map<const Primitive*, std::weak_ptr<Tree::Tree_>> getPrimitives() const { return primitives; }
 
     Node var();
@@ -122,9 +128,6 @@ protected:
      *  A Key uniquely identifies an operation Node, so that we can
      *  deduplicate based on opcode  and arguments
      */
-    typedef std::tuple<Opcode::Opcode,  /* opcode */
-                       Tree::Id,        /* lhs */
-                       Tree::Id         /* rhs */ > Key;
     std::map<Key, std::weak_ptr<Tree::Tree_>> ops;
 
     /*  Constants in the tree are uniquely identified by their value  */

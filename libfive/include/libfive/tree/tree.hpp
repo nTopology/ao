@@ -167,6 +167,8 @@ public:
      */
     std::list<Tree> ordered() const;
 
+    std::vector<Tree::Tree_*> heap() const;
+
     /*
      *  Serializes to a vector of bytes
      */
