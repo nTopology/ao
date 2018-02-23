@@ -39,6 +39,11 @@ class Tree
 {
 public:
     /*
+     *  Empty tree constructor
+     */
+    explicit Tree();
+
+    /*
      *  Returns a Tree for the given constant
      */
     Tree(float v);
@@ -176,11 +181,6 @@ public:
     static Tree load(const std::string& filename);
 
 protected:
-    /*
-     *  Empty tree constructor
-     */
-    explicit Tree();
-
     /*
      *  Private constructor
      */
