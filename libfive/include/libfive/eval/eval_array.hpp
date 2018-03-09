@@ -67,15 +67,16 @@ protected:
 
     Eigen::Array<Eigen::Vector3f, 1, N> points;
 
-    /*  ambig(index) returns whether a particular slot is ambiguous */
-    Eigen::Array<bool, 1, N> ambig;
-
     /*
      *  Per-clause evaluation, used in tape walking
      */
     void operator()(Opcode::Opcode op, Clause::Id id,
                     Clause::Id a, Clause::Id b);
+
 public:
+    /*  ambig(index) returns whether a particular slot is ambiguous */
+    Eigen::Array<bool, 1, N> ambig;
+
     /*
      *  Multi-point evaluation (values must be stored with set)
      */

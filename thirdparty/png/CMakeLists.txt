@@ -180,7 +180,8 @@ target_include_directories(pngstatic PUBLIC . ${CMAKE_CURRENT_BINARY_DIR})
 if(MSVC)
   target_compile_definitions(pngstatic PUBLIC
       _CRT_SECURE_NO_DEPRECATE)
-endif(MSVC)
+else ()
+  target_compile_definitions(pngstatic PUBLIC)
+endif()
 
-#target_compile_definitions(pngstatic PUBLIC
 #debug -DPNG_DEBUG)
