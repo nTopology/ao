@@ -1,6 +1,8 @@
 
+IF(WIN32)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4267") # int64 -> int
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # float -> int
+ENDIF(WIN32)
 
 add_library(ao-kernel STATIC
    ../include/libfive/eval/base.hpp

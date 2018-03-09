@@ -7,7 +7,7 @@
 
 #pragma once
 #pragma warning(push, 0)
-#include <Eigen/eigen>
+#include <Eigen/Eigen>
 #include <set>
 #pragma warning( pop )
 #include "libfive/render/brep/region.hpp"

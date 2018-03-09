@@ -876,6 +876,7 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<2>::edges() const
     return es;
 }
 
+template <>
 bool XTree<2>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const {
   auto corner1 = D ? 3 : 0;
   auto corner2 = (3 - corner1) ^ A;
@@ -1037,6 +1038,7 @@ const std::vector<std::pair<uint8_t, uint8_t>>& XTree<3>::edges() const
     return es;
 }
 
+template <>
 bool XTree<3>::faceSplitWasTopologicallySafe(Axis::Axis A, bool D) const {
   //If the face has no patches (all corners are full or empty), all childrens' corners must match this.
   //If the face has one patch, each child must have zero or one patches.
